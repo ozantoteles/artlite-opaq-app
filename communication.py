@@ -11,7 +11,7 @@ baud_rate = 9600
 
 aux_controller = AuxController('up')
 
-m1_pin = "blue_cntrl"
+m1_pin = "red_cntrl"
 m0_pin = "green_cntrl"
 # m1 = Pin(m1_pin)
 # m0 = Pin(m0_pin)
@@ -28,3 +28,8 @@ code, configuration = lora.get_configuration()
 
 print("Retrieve configuration: {}", ResponseStatusCode.get_description(code))
 print_configuration(configuration)
+
+
+
+lora.send_transparent_message('ceren')
+print("Sent message!")

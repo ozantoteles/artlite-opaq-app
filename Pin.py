@@ -20,10 +20,10 @@ class Pin:
         log.info("Controlling Pin: %s Value: %s", str(self.pin), str(self.value))
     
     def on(self):
-        self.setValue(0)
+        self.setValue(1)
     
     def off(self):
-        self.setValue(1)
+        self.setValue(0)
         
     def getValue(self):
         return self.value

@@ -548,8 +548,10 @@ class LoRaE220:
             PacketLength.PL_CONFIGURATION)
         print("********** 1 **********")
 
-        data = self.uart.read()
+        data = self.uart.read(11)
         print(data)
+        print("len(data): ",len(data))
+        print("PacketLength.PL_CONFIGURATION+3:", PacketLength.PL_CONFIGURATION+3)
         print("********** 2 **********")
         if data is None or len(data) != PacketLength.PL_CONFIGURATION+3:
             if data is not None:
@@ -735,7 +737,7 @@ class LoRaE220:
         if result != ResponseStatusCode.E220_SUCCESS:
             return result
         log.debug("Clear buffer...")
-        self.clean_UART_buffer()
+        #self.clean_UART_buffer()
 
         log.debug("ok!")
         return result
