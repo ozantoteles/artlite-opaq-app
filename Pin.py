@@ -13,11 +13,18 @@ class Pin:
     def setValue(self, value):
         self.value = value
         if self.value:
-            call ("echo " + str(255) + " > /sys/class/leds/" + str(self.pin) + "/brightness",shell=True)
+            if self.pin == "lazer_cntrl":
+                call ("echo " + str(4096) + " > /sys/class/leds/" + str(self.pin) + "/brightness",shell=True)
+            elif self.pin == "red_cntrl" or self.pin == "green_cntrl":
+                call ("echo " + str(255) + " > /sys/class/leds/" + str(self.pin) + "/brightness",shell=True)
+            else: #usb2_en
+                call ("echo " + str(1) + " > /sys/class/leds/" + str(self.pin) + "/brightness",shell=True)
         else:
             call ("echo " + str(0) + " > /sys/class/leds/" + str(self.pin) + "/brightness",shell=True)
             
-        log.info("Controlling Pin: %s Value: %s", str(self.pin), str(self.value))
+        #log.info("Controlling Pin: %s Value: %s", str(self.pin), str(self.value))
+        print("Controlling Pin: ",str(self.pin), " Value: ",str(self.value))
+    
     
     def on(self):
         self.setValue(1)

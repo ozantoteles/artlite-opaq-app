@@ -46,6 +46,7 @@ import re as ure
 import utime
 import json as ujson
 from config import log 
+import time 
 
 serial_port = '/dev/ttyUSB0'  
 baud_rate = 9600
@@ -169,7 +170,26 @@ class Configuration:
         self.CHAN = 23
         self.TRANSMISSION_MODE = TransmissionMode(self.model)
         self.CRYPT = Crypt()
+        
+    def set_custom_conf(self, addh=0x00, addl=0x00, airDataRate=0b10, uartParity=0b0, uartBaudRate=0b11, transmissionPower=0b0, RSSIAmbientNoise=0b0, subPacketSetting=0b0, CHAN=18, WORPeriod=0b11, enableLBT=0b0, fixedTransmission=0b0, enableRSSI=0b0):
+        self.ADDH = addh
+        self.ADDL = addl
 
+        self.SPED.airDataRate = airDataRate
+        self.SPED.uartParity = uartParity
+        self.SPED.uartBaudRate = uartBaudRate
+
+        self.OPTION.transmissionPower = transmissionPower
+        self.OPTION.RSSIAmbientNoise = RSSIAmbientNoise
+        self.OPTION.subPacketSetting = subPacketSetting
+
+        self.CHAN = CHAN
+
+        self.TRANSMISSION_MODE.WORPeriod = WORPeriod
+        self.TRANSMISSION_MODE.enableLBT = enableLBT
+        self.TRANSMISSION_MODE.fixedTransmission = fixedTransmission
+        self.TRANSMISSION_MODE.enableRSSI = enableRSSI
+        
     def get_model(self):
         return self.model
 
@@ -324,7 +344,7 @@ class LoRaE220:
     # now the constructor that receive directly the UART object
     def __init__(self, model, aux_pin=None, m0_pin=None, m1_pin=None,
                  uart_baudrate=SerialUARTBaudRate.BPS_RATE_9600):
-        self.uart = serial.Serial(serial_port, baud_rate)
+        self.uart = serial.Serial(serial_port, baud_rate, timeout=1)
         self.model = model
 
         pattern = '^(230|400|900)(T|R|MM|M)(22|30)[SD]$'
@@ -340,6 +360,9 @@ class LoRaE220:
         self.aux = None
         self.m0 = None
         self.m1 = None
+        
+        self.m0 = Pin(self.m0_pin)
+        self.m1 = Pin(self.m1_pin)
 
         self.uart_baudrate = uart_baudrate
         self.mode = None
@@ -354,8 +377,8 @@ class LoRaE220:
         #self.uart.init(baudrate=self.uart_baudrate, bits=8, parity=UARTParity.get_uart_value(uart_parity), stop=1,
         #               timeout=1000, timeout_char=1000)
 
-        self.m0 = None
-        self.m1 = None
+        #self.m0 = None
+        #self.m1 = None
         self.aux = None
         #changed#
         # if self.aux_pin is not None:
@@ -363,47 +386,59 @@ class LoRaE220:
         if self.m0_pin is not None and self.m1_pin is not None:
             # self.m0 = machine.Pin(self.m0_pin, machine.Pin.OUT)
             # self.m1 = machine.Pin(self.m1_pin, machine.Pin.OUT)
-            self.m0 = Pin(self.m0_pin)
-            self.m1 = Pin(self.m1_pin)
-            
-            self.m0.on()
-            self.m1.on()
+            #self.m0 = Pin(self.m0_pin)
+            #self.m1 = Pin(self.m1_pin)
+            print("begin, self.m0: ",self.m0)
+            print("begin, self.m1: ",self.m1)
+            #self.m0.off()
+            #self.m1.off()
 
         # self.uart.timeout(1000)
 
-        code = self.set_mode(ModeType.MODE_0_NORMAL)
+        code = self.set_mode(ModeType.MODE_0_NORMAL) 
         if code != ResponseStatusCode.SUCCESS:
             return code
 
         return code
 
     def set_mode(self, mode: ModeType) -> ResponseStatusCode:
+    
+        #self.m0 = Pin(self.m0_pin)
+        #self.m1 = Pin(self.m1_pin)
         self.managed_delay(40)
+        
+        print("self.m0: ",self.m0)
+        print("self.m1: ",self.m1)
 
         if self.m0 is None and self.m1 is None:
-            log.debug(
-                "The M0 and M1 pins are not set, which means that you are connecting the pins directly as you need!")
+            #log.debug(
+            #    "The M0 and M1 pins are not set, which means that you are connecting the pins directly as you need!")
+            print("The M0 and M1 pins are not set, which means that you are connecting the pins directly as you need!")
         else:
             if mode == ModeType.MODE_0_NORMAL:
                 # Mode 0 | normal operation
                 self.m0.off()
                 self.m1.off()
-                log.debug("MODE NORMAL!")
+                #log.debug("MODE NORMAL!")
+                print("MODE NORMAL!")
             elif mode == ModeType.MODE_1_WOR_TRANSMITTER:
                 # Mode 1 | wake-up operation
                 self.m0.on()
                 self.m1.off()
-                log.debug("MODE WOR TRANSMITTER!")
+                #log.debug("MODE WOR TRANSMITTER!")
+                print("MODE WOR TRANSMITTER!")
             elif mode == ModeType.MODE_2_POWER_SAVING:
                 # Mode 2 | power saving operation
                 self.m0.off()
                 self.m1.on()
-                log.debug("MODE WOR RECEIVER!")
+                #log.debug("MODE WOR RECEIVER!")
+                print("MODE WOR RECEIVER!")
             elif mode == ModeType.MODE_3_CONFIGURATION:
                 # Mode 3 | Setting operation
                 self.m0.on()
                 self.m1.on()
-                log.debug("MODE PROGRAM!")
+                #log.debug("MODE PROGRAM!")
+                print("MODE PROGRAM!")
             else:
                 return ResponseStatusCode.ERR_E220_INVALID_PARAM
 
@@ -432,21 +467,25 @@ class LoRaE220:
 
         if utime.ticks_add(t, timeout) == 0:
             t = 0
-
+        print("aux.value: ", self.aux)
         if self.aux is not None:
+            
             while self.aux.value() == 0:
                 if utime.ticks_diff(utime.ticks_ms(), t) > timeout:
                     result = ResponseStatusCode.ERR_E220_TIMEOUT
-                    log.debug("Timeout error!")
+                    #log.debug("Timeout error!")
+                    print("Timeout error!")
                     return result
 
-            log.debug("AUX HIGH!")
+            #log.debug("AUX HIGH!")
+            print("AUX HIGH!")
         else:
             self.managed_delay(wait_no_aux)
-            log.debug("Wait no AUX pin!")
-
+            #log.debug("Wait no AUX pin!")
+            print("Wait no AUX pin!")
         self.managed_delay(20)
-        log.debug("Complete!")
+        #log.debug("Complete!")
+        print("Complete!")
         return result
 
     def check_UART_configuration(self, mode) -> ResponseStatusCode:
@@ -474,8 +513,8 @@ class LoRaE220:
             configuration._COMMAND = ProgramCommand.WRITE_CFG_PWR_DWN_LOSE
 
         data = configuration.to_bytes()
-        log.debug("Writing configuration: {} size {}".format(configuration.to_hex_string(), len(data)))
-
+        #log.debug("Writing configuration: {} size {}".format(configuration.to_hex_string(), len(data)))
+        print("Writing configuration: ",configuration.to_hex_string()," size ",len(data))
         len_writed = self.uart.write(data)
         if len_writed != len(data):
             self.set_mode(prev_mode)
@@ -483,61 +522,67 @@ class LoRaE220:
 
         code = self.set_mode(prev_mode)
         if code != ResponseStatusCode.E220_SUCCESS:
+        
             return code, None
-
-        data = self.uart.read()
-
+        print("ceycyecyeyceycyey")
+        print("------ BEFORE READ ------")
+        data = self.uart.read(self.uart.in_waiting)
+        print("------ AFTER READ ------")
         if data is None or len(data) != PacketLength.PL_CONFIGURATION+3:
             if data is not None:
-                log.debug("data: {}".format(data))
-                log.debug("data len: {}".format(len(data)))
+                #log.debug("data: {}".format(data))
+                print("11 data: ",data)
+                #log.debug("data len: {}".format(len(data)))
+                print("11 data len: ",len(data))
             code = ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH
             return code, None
-        log.debug("data: {}".format(data))
-        log.debug("data len: {}".format(len(data)))
+        #log.debug("data: {}".format(data))
+        print("22 data: ",data)
+        #log.debug("data len: {}".format(len(data)))
+        print("22 data len: ",len(data))
 
-        log.debug("model: {}".format(self.model))
+        #log.debug("model: {}".format(self.model))
+        print("model: ",self.model)
+        
         configuration = Configuration(self.model)
+        print("********* 1 **********")
         configuration.from_bytes(data)
-
+        print("********* 2 **********")
         if ProgramCommand.WRONG_FORMAT == configuration._COMMAND:
             code = ResponseStatusCode.ERR_E220_WRONG_FORMAT
         if ProgramCommand.RETURNED_COMMAND != configuration._COMMAND or \
                 RegisterAddress.REG_ADDRESS_CFG != configuration._STARTING_ADDRESS or \
                 PacketLength.PL_CONFIGURATION != configuration._LENGTH:
             code = ResponseStatusCode.ERR_E220_HEAD_NOT_RECOGNIZED
-
+        print("********* 3 **********")
         self.clean_UART_buffer()
-
+        print("********* 4 **********")
         return code, configuration
 
     def write_program_command(self, cmd, addr, pl) -> int:
         print("before: ",cmd)
         cmd = bytearray([cmd, addr, pl])
         print("after: ",cmd)
+        #time.sleep(5)
         size = self.uart.write(cmd)
-        #size = self.uart.write(b"Helloo")
-        print("size: ",size)
-        print("self.m0: ",self.m0.getValue())
-        print("self.m1: ",self.m1.getValue())
         self.managed_delay(50)  # need to check
 
         return size != 3
 
     def get_configuration(self) -> (ResponseStatusCode, Configuration):
         code = self.check_UART_configuration(ModeType.MODE_3_PROGRAM)
-        log.debug("check_UART_configuration: {}".format(code))
+        #log.debug("check_UART_configuration: {}".format(code))
         print("check_UART_configuration: ", code)
         if code != ResponseStatusCode.E220_SUCCESS:
             return code, None
 
         prev_mode = self.mode
         code = self.set_mode(ModeType.MODE_3_PROGRAM)
+        print("code: ",code)
         if code != ResponseStatusCode.E220_SUCCESS:
             return code, None
-        log.debug("set_mode: {}".format(code))
-        print("set_mode: ", code)
-        
+        #log.debug("set_mode: {}".format(code))
+        print("set_mode: ",code)
         print(ProgramCommand.READ_CONFIGURATION)
         print(RegisterAddress.REG_ADDRESS_CFG)
         print(PacketLength.PL_CONFIGURATION)
@@ -546,29 +591,30 @@ class LoRaE220:
             ProgramCommand.READ_CONFIGURATION,
             RegisterAddress.REG_ADDRESS_CFG,
             PacketLength.PL_CONFIGURATION)
-        print("********** 1 **********")
-
-        data = self.uart.read(11)
+            
+        print("########### 1 ###########")
+        time.sleep(1)
+        data = self.uart.read(self.uart.in_waiting) #11
         print(data)
         print("len(data): ",len(data))
         print("PacketLength.PL_CONFIGURATION+3:", PacketLength.PL_CONFIGURATION+3)
-        print("********** 2 **********")
+        print("########### 2 ###########")
         if data is None or len(data) != PacketLength.PL_CONFIGURATION+3:
             if data is not None:
-                log.debug("data: {}".format(data))
-                log.debug("data len: {}".format(len(data)))
+                #log.debug("data: {}".format(data))
+                #log.debug("data len: {}".format(len(data)))
                 print("data: ", data)
                 print("data len: ", len(data))
             code = ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH
             return code, None
-        print("********** 3 **********")
-        log.debug("data: {}".format(data))
-        log.debug("data len: {}".format(len(data)))
+        print("########### 3 ###########")
+        #log.debug("data: {}".format(data))
+        #log.debug("data len: {}".format(len(data)))
         print("data: ", data)
         print("data len: ", len(data))
 
-        log.debug("model: {}".format(self.model))
-        print("data len: ", self.model)
+        #log.debug("model: {}".format(self.model))
+        print("model: ", self.model)
         configuration = Configuration(self.model)
         configuration.from_bytes(data)
         code = self.set_mode(prev_mode)
@@ -633,44 +679,57 @@ class LoRaE220:
                 data[i] = data[i] % 256
         return data
 
-    def receive_dict(self, rssi=False, delimiter=None, size=None) -> (ResponseStatusCode, any, int or None):
-        code, msg, rssi_value = self.receive_message(rssi, delimiter, size)
-        if code != ResponseStatusCode.E220_SUCCESS:
-            return code, None, None
-
-        try:
-            msg = ujson.loads(msg)
-        except Exception as e:
-            log.error("Error: {}".format(e))
-            return ResponseStatusCode.ERR_E220_JSON_PARSE, None, None
-
-        return code, msg, rssi_value
-
     def receive_message(self, rssi=False, delimiter=None, size=None):
         code = ResponseStatusCode.E220_SUCCESS
         rssi_value = None
-        if delimiter is not None:
-            data = self._read_until(delimiter)
+        data = None
+
+        try:
+            if delimiter is not None:
+                data = self._read_until(delimiter)
+            elif size is not None:
+                data = self.uart.read(size)
+            else:
+                data = self.uart.read()
+                self.clean_UART_buffer()
+
+            if data is None or len(data) == 0:
+                return (ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH, None, None) \
+                    if rssi else (ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH, None)
+
             if rssi:
-                rssi_value = data[-1]  # last byte is rssi
-                data = data[:-1]  # remove rssi from data
-        elif size is not None:
-            data = self.uart.read(size)
+                rssi_value = data[-1]  # Last byte is RSSI
+                data = data[:-1]  # Remove RSSI from data
+
+            msg = data.decode('utf-8').strip()  # Ensure trailing spaces are removed
+
+            if not msg:
+                return ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH, None, rssi_value
+
+            return code, msg, rssi_value
+
+        except Exception as e:
+            print("Error in receive_message:", e)
+            return ResponseStatusCode.ERR_E220_INTERNAL_ERROR, None, None
+
+    def receive_dict(self, rssi=False, delimiter=None, size=None) -> (ResponseStatusCode, any, int or None):
+        code, msg, rssi_value = self.receive_message(rssi, delimiter, size)
+        
+        if code != ResponseStatusCode.E220_SUCCESS:
+            return code, None, None
+        
+        if msg:
+            try:
+                msg = ujson.loads(msg)
+            except Exception as e:
+                print("JSON parse error:", e)
+                return ResponseStatusCode.ERR_E220_JSON_PARSE, None, None
         else:
-            data = self.uart.read()
-            self.clean_UART_buffer()
-            if rssi:
-                rssi_value = data[-1]  # last byte is rssi
-                data = data[:-1]  # remove rssi from data
+            print("Received message is empty")
+            return ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH, None, rssi_value
 
-        if data is None or len(data) == 0:
-            return (ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH, None, None) \
-                if rssi else (ResponseStatusCode.ERR_E220_DATA_SIZE_NOT_MATCH, None)
+        return code, msg, rssi_value
 
-        data = data.decode('utf-8')
-        msg = data
-
-        return (code, msg, rssi_value) if rssi else (code, msg)
 
     def clean_UART_buffer(self):
         self.uart.read()
@@ -725,7 +784,8 @@ class LoRaE220:
             lenMS = self.uart.write(bytes(message))
 
         if lenMS != size_:
-            log.debug("Send... len:", lenMS, " size:", size_)
+            #log.debug("Send... len:", lenMS, " size:", size_)
+            print("Send... len:", lenMS, " size:", size_)
             if lenMS == 0:
                 result = ResponseStatusCode.ERR_E220_NO_RESPONSE_FROM_DEVICE
             else:
@@ -736,14 +796,16 @@ class LoRaE220:
         result = self.wait_complete_response(1000)
         if result != ResponseStatusCode.E220_SUCCESS:
             return result
-        log.debug("Clear buffer...")
+        #log.debug("Clear buffer...")
+        print("Clear buffer...")
         #self.clean_UART_buffer()
 
-        log.debug("ok!")
+        #log.debug("ok!")
+        print("ok!")
         return result
 
     def available(self) -> int:
-        return self.uart.any()
+        return self.uart.in_waiting
 
     def end(self) -> ResponseStatusCode:
         try:
@@ -753,5 +815,6 @@ class LoRaE220:
             return ResponseStatusCode.E220_SUCCESS
 
         except Exception as E:
-            log.error("Error: {}".format(E))
+            #log.error("Error: {}".format(E))
+            print("Error: ", E)
             return ResponseStatusCode.ERR_E220_DEINIT_UART_FAILED

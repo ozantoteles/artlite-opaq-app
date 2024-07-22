@@ -31,7 +31,7 @@ with serial.Serial(
     time.sleep(1)  # Adjust sleep time as needed
 
     # Read the response
-    response = ser.read(64)  # Adjust the number of bytes to read as necessary
+    response = ser.read(2)  # Adjust the number of bytes to read as necessary
 
     if response:
         print("Response received:", response.hex())
