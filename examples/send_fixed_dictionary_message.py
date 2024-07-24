@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, "/usr/local/OPAQ/")
+sys.path.insert(0, "/usr/local/artlite-opaq-app/")
 from lib.lora_e220 import LoRaE220, print_configuration, Configuration
 from Pin import Pin
 from auxController import AuxController

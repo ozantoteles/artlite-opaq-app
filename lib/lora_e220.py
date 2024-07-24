@@ -35,7 +35,7 @@
 # THE SOFTWARE.
 #############################################################################################
 import sys
-sys.path.insert(0, "/usr/local/OPAQ/lib/")
+sys.path.insert(0, "/usr/local/artlite-opaq-app/lib/")
 from lora_e220_constants import UARTParity, UARTBaudRate, TransmissionPower, FixedTransmission, AirDataRate, \
     OperatingFrequency, LbtEnableByte, WorPeriod, RssiEnableByte, RssiAmbientNoiseEnable, SubPacketSetting
 from lora_e220_operation_constant import ResponseStatusCode, ModeType, ProgramCommand, SerialUARTBaudRate, \
