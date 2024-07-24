@@ -171,7 +171,7 @@ class Configuration:
         self.TRANSMISSION_MODE = TransmissionMode(self.model)
         self.CRYPT = Crypt()
         
-    def set_custom_conf(self, addh=0x00, addl=0x00, airDataRate=0b10, uartParity=0b0, uartBaudRate=0b11, transmissionPower=0b0, RSSIAmbientNoise=0b0, subPacketSetting=0b0, CHAN=18, WORPeriod=0b11, enableLBT=0b0, fixedTransmission=0b0, enableRSSI=0b0):
+    def set_custom_conf(self, addh=0x00, addl=0x00, airDataRate=0b10, uartParity=0b0, uartBaudRate=0b11, transmissionPower=0b0, RSSIAmbientNoise=0b0, subPacketSetting=0b0, CHAN=18, WORPeriod=0b11, enableLBT=0b0, fixedTransmission=0b1, enableRSSI=0b0):
         self.ADDH = addh
         self.ADDL = addl
 
@@ -757,6 +757,8 @@ class LoRaE220:
         return self._send_message(message, ADDH, ADDL, CHAN)
 
     def send_fixed_dict(self, ADDH, ADDL, CHAN, dict_message) -> ResponseStatusCode:
+        if isinstance(dict_message, bytes):
+            dict_message = ujson.loads(dict_message.decode('utf-8'))
         message = ujson.dumps(dict_message)
         return self._send_message(message, ADDH, ADDL, CHAN)
 

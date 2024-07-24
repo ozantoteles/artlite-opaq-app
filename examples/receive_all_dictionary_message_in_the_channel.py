@@ -19,12 +19,12 @@ m0_pin = "green_cntrl"
 vcc_pin = "lazer_cntrl"
 ftdi_en_pin = "usb2_en"
 
-m1_pin_obj = Pin(m1_pin,0)
-m0_pin_obj = Pin(m0_pin,0)
+m1_pin_obj = Pin(m1_pin, 0)
+m0_pin_obj = Pin(m0_pin, 0)
 time.sleep(1)
-vcc_pin_obj = Pin(vcc_pin,0)
+vcc_pin_obj = Pin(vcc_pin, 0)
 time.sleep(1)
-ftdi_en_pin_obj = Pin(ftdi_en_pin,0)
+ftdi_en_pin_obj = Pin(ftdi_en_pin, 0)
 time.sleep(1)
 vcc_pin_obj.on()
 time.sleep(1)
@@ -33,20 +33,16 @@ time.sleep(5)
 
 lora = LoRaE220('900T22D', aux_pin=aux_controller, m0_pin=m0_pin, m1_pin=m1_pin)
 
-
-
-# lora = LoRaE220('400T22D', uart2, aux_pin=15, m0_pin=21, m1_pin=19)
-
 code = lora.begin()
 print("Initialization: {}", ResponseStatusCode.get_description(code))
 
 # Set the configuration to default values and print the updated configuration to the console
 # Not needed if already configured
 configuration_to_set = Configuration('900T22D')
-# Comment this section if you want test transparent trasmission
-configuration_to_set.ADDH = BROADCAST_ADDRESS # Address of this receive no sender
-configuration_to_set.ADDL = BROADCAST_ADDRESS # Address of this receive no sender
-configuration_to_set.CHAN = 25 # Address of this receive no sender
+# Comment this section if you want test transparent transmission
+configuration_to_set.ADDH = BROADCAST_ADDRESS  # Address of this receive no sender
+configuration_to_set.ADDL = BROADCAST_ADDRESS  # Address of this receive no sender
+configuration_to_set.CHAN = 25  # Address of this receive no sender
 configuration_to_set.TRANSMISSION_MODE.fixedTransmission = FixedTransmission.FIXED_TRANSMISSION
 # To enable RSSI, you must also enable RSSI on sender
 configuration_to_set.TRANSMISSION_MODE.enableRSSI = RssiEnableByte.RSSI_ENABLED
@@ -55,9 +51,14 @@ code, confSetted = lora.set_configuration(configuration_to_set)
 print("Set configuration: {}", ResponseStatusCode.get_description(code))
 
 print("Waiting for messages...")
+
+poll_interval = 1.0  # Polling interval in seconds (adjust based on message frequency)
+
 while True:
+    start_time = time.time()
+    
     if lora.available() > 0:
-        code, value, rssi = lora.receive_dict(rssi=True, size=37)
+        code, value, rssi = lora.receive_dict(rssi=True, size=100)
         print('RSSI:', rssi)
 
         if code == ResponseStatusCode.E220_SUCCESS:
@@ -69,5 +70,8 @@ while True:
                 print("Error accessing received data:", e)
         else:
             print("Error Code:", ResponseStatusCode.get_description(code))
-
-        time.sleep(1)
+    
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    sleep_duration = max(0, poll_interval - elapsed_time)
+    time.sleep(sleep_duration)
