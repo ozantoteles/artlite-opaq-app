@@ -6,6 +6,7 @@ import time
 import json
 from lora_e220_operation_constant import ResponseStatusCode, ModeType
 import hashlib
+from datetime import datetime
 
 def generate_address(unique_id):
     # Hash the unique ID using SHA-256
@@ -78,16 +79,31 @@ code, configuration = lora.get_configuration()
 print("Retrieve configuration code:", code)
 print_configuration(configuration)
 
-while True:
-    data = unique_id_json_content
-    json_data = json.dumps(data)
-    print("Sending data:", json_data)
-    code = lora.send_fixed_message(addrh,addrl,25,json_data)
-    print("Send message code:", code)
-    print("Send message description:", ResponseStatusCode.get_description(code))
-    
-    # Debugging: Check the state of the pins
-    print("M0 pin state:", m0_pin_obj.value)
-    print("M1 pin state:", m1_pin_obj.value)
-    
-    time.sleep(5)
+# Define unique IDs and their respective slots
+unique_ids = {
+    "492e39d7": 0,
+    "403a39d7": 1,
+    "3f2e39d7": 2,
+    "0a3039d7": 3
+}
+
+# Get the time slot for this device
+time_slot = unique_ids.get(unique_id, -1)
+
+if time_slot == -1:
+    print("Unknown device ID.")
+else:
+    while True:
+        current_time = datetime.utcnow()
+        current_slot = (current_time.second // 10) % 4
+
+        if current_slot == time_slot:
+            data = unique_id_json_content
+            json_data = json.dumps(data)
+            print(f"Device {unique_id} sending data at time slot {time_slot}: {json_data}")
+            code = lora.send_fixed_message(addrh, addrl, 25, json_data)
+            print("Send message code:", code)
+            print("Send message description:", ResponseStatusCode.get_description(code))
+        
+        # Wait for the next slot
+        time.sleep(2)

@@ -56,21 +56,34 @@ print_configuration(configuration)
 
 print("Waiting for messages...")
 
-#lora.set_mode(ModeType.MODE_2_WOR_RECEIVER)
+# lora.set_mode(ModeType.MODE_2_WOR_RECEIVER)
 
 while True:
     if lora.available() > 0:
-        code, value, rssi = lora.receive_dict(rssi=True, size=100)
-        print("RSSI:", rssi)
-        print("Receive message code:", code)
-        print("Receive message description:", ResponseStatusCode.get_description(code))
+        try:
+            code, value, rssi = lora.receive_dict(rssi=True, size=100)
+            print("RSSI:", rssi)
+            print("Receive message code:", code)
+            print("Receive message description:", ResponseStatusCode.get_description(code))
 
-        if code == ResponseStatusCode.E220_SUCCESS:
-            try:
-                print("Received data:", value)
-            except (TypeError, KeyError) as e:
-                print("Error accessing received data:", e)
-        else:
-            print("Error Code:", ResponseStatusCode.get_description(code))
+            if code == ResponseStatusCode.E220_SUCCESS:
+                try:
+                    # Decode message with error replacement
+                    msg = value.decode('utf-8', errors='replace').strip()
+                    print("Received data:", msg)
+                except (TypeError, KeyError) as e:
+                    print("Error accessing received data:", e)
+            else:
+                print("Error Code:", ResponseStatusCode.get_description(code))
+        except UnicodeDecodeError as e:
+            print("UnicodeDecodeError:", e)
+            # Handle the error or ignore invalid bytes
+        except AttributeError as e:
+            print("AttributeError:", e)
+            # Use an existing error code or define ERR_E220_INTERNAL_ERROR if it should exist
+            ResponseStatusCode.ERR_E220_INTERNAL_ERROR = -1
 
+    # Debugging: Check the state of the pins
+    print("M0 pin state:", m0_pin_obj.value)
+    print("M1 pin state:", m1_pin_obj.value)
     time.sleep(1)

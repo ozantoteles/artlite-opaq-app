@@ -73,4 +73,8 @@ while True:
         else:
             print("Error Code:", ResponseStatusCode.get_description(code))
 
+    # Debugging: Check the state of the pins
+    print("M0 pin state:", m0_pin_obj.value)
+    print("M1 pin state:", m1_pin_obj.value)
+
     time.sleep(1)

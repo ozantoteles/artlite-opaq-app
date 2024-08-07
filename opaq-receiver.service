@@ -1,0 +1,21 @@
+[Unit]
+Description=OPAQ Receiver
+RequiresMountsFor=/run
+Before=lucan.service
+After=c-bridge.service c-vergil.service c-meta.service
+Requires=c-bridge.service c-vergil.service c-meta.service lucan.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=root
+Group=root
+PermissionsStartOnly=true
+StandardError=journal
+StandardOutput=journal
+WorkingDirectory=/usr/local/artlite-opaq-app
+ExecStart=/usr/bin/python3.10 /usr/local/artlite-opaq-app/comm_fixed_receiver.py
+
+[Install]
+WantedBy=multi-user.target
