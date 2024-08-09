@@ -3,10 +3,6 @@ import time
 import argparse
 import sys
 import json
-import logging
-
-sys.path.insert(0, "/usr/local/cair-app/")
-from config import log
 
 
 #for reference to SGX MICS-6814 sensor look at https://teams.microsoft.com/l/file/F1AF367D-E383-4058-BF6C-B59D0514E52A?tenantId=ef5926db-9bdf-4f9f-9066-d8e7f03943f7&fileType=pdf&objectUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA%2FShared%20Documents%2FGeneral%2FDonan%C4%B1m%2FDatasheet%2FSGX-6814-rev-8.pdf&baseUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA&serviceName=teams&threadId=19:dc5e5b9ac9cc4d49b2ef5ec90748f095@thread.skype&groupId=7cfa0503-c29f-4147-a5c7-e088994d1bfb
@@ -74,14 +70,12 @@ def ftc_mode(file):
 
     bus = init(adcPATH_CO, adcPATH_NH3, adcPATH_NO2)
     dataCO, dataNH3, dataNO2 = read()
-    log.info('CO: %f ', dataCO)
-    log.info('NH3: %f ', dataNH3)
-    log.info('NO2: %f ', dataNO2)
+
     if  dataCO < CO_data_upper_limit and dataCO > CO_data_lower_limit and \
         dataNH3 < NH3_data_upper_limit and dataNH3 > NH3_data_lower_limit and \
         dataNO2 < NO2_data_upper_limit and dataNO2 > NO2_data_lower_limit      \
         :
-        log.info("sensor value(s) are normal, OK")
+
 
         output_json = {
             "CO": str(dataCO),
@@ -94,7 +88,7 @@ def ftc_mode(file):
 
         sys.exit(0)
     else:
-        log.info("sensor value(s) are not within desired limits, FAIL")
+
         sys.exit(1)
 
 def main():
@@ -116,7 +110,7 @@ def main():
     init(adcPATH_CO, adcPATH_NH3, adcPATH_NO2)
 
     dataCO, dataNH3, dataNO2 = read()
-    log.info("dataCO, dataNH3, dataNO2: %f, %f, %f",dataCO, dataNH3, dataNO2)
+
     time.sleep(1)
     # while 1:
         

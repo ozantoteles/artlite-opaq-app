@@ -11,6 +11,35 @@ mkdir -p $TEMP_DIR
 tar --exclude='*.pyc' --exclude='__pycache__' --exclude='.vscode' --exclude='.git' --exclude='.gitignore' -czf $TEMP_DIR/$TARBALL_NAME -C $(dirname $SOURCE_DIR) $(basename $SOURCE_DIR)
 echo "Tarball created: $TEMP_DIR/$TARBALL_NAME"
 
+# Create the service file
+SERVICE_FILE_PATH="$SOURCE_DIR/artlite-opaq-app.service"
+cat <<EOL > $SERVICE_FILE_PATH
+[Unit]
+Description=Artlite Opaq APP
+RequiresMountsFor=/run
+After=cair-app.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=root
+Group=root
+PermissionsStartOnly=true
+StandardError=journal
+StandardOutput=journal
+WorkingDirectory=/usr/local/artlite-opaq-app
+ExecStartPre=/bin/sleep 120
+ExecStartPre=/bin/systemctl stop cair-app.service
+ExecStart=/usr/bin/python3.10 /usr/local/artlite-opaq-app/src/main.py
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+echo "Service file created: $SERVICE_FILE_PATH"
+
 # Function to execute commands over SSH
 function ssh_execute {
   local target=$1
@@ -20,10 +49,11 @@ function ssh_execute {
 }
 
 # Loop through each target
-for target in 192.168.1.136; do
-  echo "Copying tarball to $target..."
-  # Copy the tarball to the remote target
+for target in 192.168.1.100 192.168.1.102 192.168.1.104 192.168.1.108 192.168.1.122 192.168.1.186; do
+  echo "Copying tarball and service file to $target..."
+  # Copy the tarball and service file to the remote target
   scp $TEMP_DIR/$TARBALL_NAME root@$target:/usr/local/
+  scp $SERVICE_FILE_PATH root@$target:/usr/local/artlite-opaq-app.service
 
   echo "Running setup commands on $target..."
   # Commands to execute on the remote target
@@ -59,10 +89,23 @@ for target in 192.168.1.136; do
     # Extract the tarball and remove it
     tar -xzf /usr/local/$TARBALL_NAME -C /usr/local/ && rm /usr/local/$TARBALL_NAME
     echo 'Tarball extracted and removed.'
+
+    echo 'Running unique address generator...'
+    # Run the unique address generator script
+    python3.10 /usr/local/artlite-opaq-app/scripts/unique_address_generator.py
+    echo 'Unique address generation complete.'
+
+    echo 'Setting up systemd service...'
+    # Copy the service file to systemd directory and enable/start the service
+    cp /usr/local/artlite-opaq-app.service /lib/systemd/system/
+    systemctl daemon-reload
+    systemctl enable artlite-opaq-app.service
+    systemctl start artlite-opaq-app.service
+    echo 'Systemd service setup complete.'
   "
 done
 
 # Clean up the local tarball
 echo 'Cleaning up local tarball...'
 rm -r $TEMP_DIR
-echo 'Local tarball cleanup complete.'
+echo 'Local cleanup complete.'

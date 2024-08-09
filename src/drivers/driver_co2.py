@@ -3,15 +3,13 @@ import time
 import argparse
 import sys
 import json
-import logging
+
 
 if sys.version_info[:2] == (3, 10):
     import smbus2 as smbus
 else:
     import smbus
 
-sys.path.insert(0, "/usr/local/cair-app/")
-from config import log
 
 
 #for reference to Wuhan Cubic CM1107 sensor look at https://teams.microsoft.com/l/file/2ACD82CA-5781-4313-B232-071C023A9F8B?tenantId=ef5926db-9bdf-4f9f-9066-d8e7f03943f7&fileType=pdf&objectUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA%2FShared%20Documents%2FGeneral%2FDonan%C4%B1m%2FDatasheet%2FCM1107.pdf&baseUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA&serviceName=teams&threadId=19:dc5e5b9ac9cc4d49b2ef5ec90748f095@thread.skype&groupId=7cfa0503-c29f-4147-a5c7-e088994d1bfb
@@ -295,7 +293,7 @@ def main():
 
     bus = init(0)
     co2_data = read(bus)
-    log.info('CO2 sensor value: %d', co2_data)
+
     return 0
 
 if __name__ == '__main__':

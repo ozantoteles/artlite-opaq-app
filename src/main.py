@@ -2,8 +2,10 @@ import random
 import serial
 import time
 import json
-#from sensorUtils import SensorHandler
+from sensorUtils import SensorHandler
 #from functionAQI import getQuality
+
+
 
 def setup_pins(status):
     print("Setting up pins...")
@@ -235,14 +237,22 @@ def send_data(ser, device_id):
         # Example data to send
         # Generate random data payload (e.g., 3 bytes)
         #data_payload = bytes([random.randint(0, 255) for _ in range(3)])
-        data_payload = device_id.encode('utf-8')
+        #data_payload = device_id.encode('utf-8')
         # Create the full message
-        full_message = start_delimiter + data_payload + end_delimiter
-        
+        #full_message = start_delimiter + data_payload + end_delimiter
+        message = read_sensor()
         # Send the message
         #while True:
-        ser.write(full_message)
-        print(f"Sent Data: {full_message.hex()}")
+        print(f"Sent Data: {message}")
+        json_str = json.dumps(message)
+
+        # Step 3: Encode the JSON string to bytes
+        json_bytes = json_str.encode('utf-8')
+
+        # Step 4: Convert the bytes to a hexadecimal string
+        hex_data = json_bytes.hex()
+        ser.write( bytes.fromhex(hex_data))
+        
         time.sleep(1)  # Send data every second for testing purposes
     except serial.SerialException as e:
         print(f"Error: {e}")
@@ -250,12 +260,12 @@ def send_data(ser, device_id):
         print("Stopped sending.")
 
 
-'''
 def read_sensor():
     __sensor = SensorHandler()
 
     sensor_data = __sensor.handler()
-
+    
+    '''
     dataTemp = sensor_data["CAIRRHTLEVEL_EXTERNAL_TEMP"]
     dataHum = sensor_data["CAIRRHTLEVEL_EXTERNAL_HUM"]
     dataCO2 = sensor_data["CAIRCO2LEVEL"]
@@ -269,7 +279,7 @@ def read_sensor():
     sttCairHealthLevel, sttCairHealthStatus = getQuality("AQI.json",dataNO2,dataVOC,dataPM10,dataPM1_0,dataCO2,dataPM2_5)
     
     serial_message = (
-        "*" +
+        "*A" +
         str(int(dataTemp)) + ";" +
         str(int(dataHum)) + ";" +
         str(dataCO2) + ";" +
@@ -278,14 +288,12 @@ def read_sensor():
         str(dataPM1_0) + ";" +
         str(dataPM2_5) + ";" +
         str(dataPM10) + ";" +
-        str(int(sttCairHealthLevel)) + "*"
+        str(int(sttCairHealthLevel)) + "B#"
     )
-
-    return serial_message
-'''
+    '''
+    return sensor_data
 
 if __name__ == "__main__":
-
     setup_pins("OFF")
     setup_pins("ON")
     set_mode("configuration")
@@ -294,41 +302,60 @@ if __name__ == "__main__":
     try:
         with open("/usr/local/artlite-opaq-app/config/device_config.json", 'r') as f:
             unique_ids = json.load(f)
+        print("Device configuration loaded successfully.")
     except IOError as e:
         print(f"Failed to read device configuration: {e}")
+        exit(1)  # Exit if the configuration can't be loaded
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON: {e}")
+        exit(1)  # Exit if the JSON is invalid
 
     device_id = get_device_id()
 
     if device_id in unique_ids:
+        print(f"Device ID {device_id} found in configuration.")
         while True:
-            uniqueAddr_str = unique_ids[device_id]["uniqueAddr"] 
-            channel_str = unique_ids[device_id]["channel"] 
+            try:
+                uniqueAddr_str = unique_ids[device_id]["uniqueAddr"]
+                channel_str = unique_ids[device_id]["channel"]
 
-            # Convert the strings to hexadecimal integers
-            channel = int(channel_str, 16)
-            unique_addr_hex = int(uniqueAddr_str, 16)
+                # Convert the strings to hexadecimal integers
+                channel = int(channel_str, 16)
+                unique_addr_hex = int(uniqueAddr_str, 16)
 
-            # Parse uniqueAddr hex into low and high bytes
-            ADDL = unique_addr_hex & 0xFF  # Extract the low byte
-            ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
+                # Parse uniqueAddr hex into low and high bytes
+                ADDL = unique_addr_hex & 0xFF  # Extract the low byte
+                ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
 
-            # Print the results
-            print(f"Channel Hex: {channel:#x}")
-            print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
-            print(f"UniqueAddr Low Byte: {ADDL:#x}")
-            print(f"UniqueAddr High Byte: {ADDH:#x}")
+                # Log the results
+                print(f"Channel Hex: {channel:#x}")
+                print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
+                print(f"UniqueAddr Low Byte: {ADDL:#x}")
+                print(f"UniqueAddr High Byte: {ADDH:#x}")
 
-            with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
-                configure_lora(ser, ADDH, ADDL, channel)
+                with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                    configure_lora(ser, ADDH, ADDL, channel)
 
-                # Flush any stale data in the buffers
-                ser.flushInput()
-                ser.flushOutput()
+                    # Flush any stale data in the buffers
+                    ser.flushInput()
+                    ser.flushOutput()
 
-                time.sleep(1)
+                    time.sleep(1)
 
-                send_data(ser, device_id)
+                    send_data(ser, device_id)
 
-                time.sleep(5)
+                    time.sleep(5)
+
+            except KeyError as e:
+                print(f"Configuration for device ID {device_id} is incomplete: {e}")
+                break  # Exit loop if configuration is missing key data
+            except serial.SerialException as e:
+                print(f"Serial communication error: {e}")
+                time.sleep(10)  # Wait and retry if there's a serial error
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+                time.sleep(10)  # Wait and retry in case of unexpected errors
+    else:
+        print(f"Device ID {device_id} not found in configuration.")
 
 

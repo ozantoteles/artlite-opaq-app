@@ -5,8 +5,6 @@ import sys
 from sensirion_i2c_driver import LinuxI2cTransceiver, I2cConnection
 from sensirion_i2c_sht.sht4x.device import Sht4xI2cDevice
 from sensirion_i2c_sht.sht3x.device import Sht3xI2cDevice
-sys.path.insert(0, "/usr/local/cair-app/")
-from config import log
 
 
 # Define I2C address constants for RHT sensors
@@ -32,11 +30,11 @@ def init(busNo, sensorName, addr=Z7N904R_SHT30_ADDR):
         elif addr == Z7N904R_SHT30_ADDR:
             sht = Sht3xI2cDevice(I2cConnection(i2c_transceiver_sht), slave_address=addr)
     except:
-        log.error("Error initializing %s.", sensorName)
+
         i2c_transceiver_sht.close()
         return -1, -1  
     
-    log.debug("%s initialized successfully.", sensorName)
+
     
     return sht, i2c_transceiver_sht
     
@@ -45,11 +43,7 @@ def read(sensor, i2cTransceiver):
     
     temperature, humidity = sensor.single_shot_measurement()
     
-    log.debug('SHT Temperature ticks: %d', temperature.ticks)
-    log.debug('SHT Temperature celcius: %f', temperature.degrees_celsius)
-    log.debug('SHT Temperature fahrenheit: %f', temperature.degrees_fahrenheit)
-    log.debug('SHT Relative Humidity ticks: %d', humidity.ticks)
-    log.debug('SHT Relative Humidity RH: %f', humidity.percent_rh)
+
     
     sht_data = {}
     temp = temperature.degrees_celsius
@@ -116,12 +110,11 @@ def main():
         temp, hum = read(sht, i2c_transceiver_sht)
         
         # Log the temp, hum, hcho values, and device marking
-        log.info('SHT Temperature: %f', temp)
-        log.info('SHT Relative Humidity: %f', hum)
+
 
     except Exception as e:
         # Log any exceptions
-        log.error('An error occurred: %s', str(e))
+        print('An error occurred: %s', str(e))
 
     return 0
 

@@ -6,7 +6,6 @@ import drivers.driver_sgp4x as sensorTVOC2
 import drivers.driver_adcs as sensorADCs
 import batteryController
 from functionAQI import getQuality
-from config import log
 
 busNR_CM1107 = 0
 busNR_PM2008 = 0
@@ -42,10 +41,10 @@ class SensorHandler:
         else: # CO2, PM, BAT
             try:
                 sensorBus = sensor.init(busNo)
-                log.debug('%s initialized successfully.',sensorName)
+                print('%s initialized successfully.',sensorName)
                 return sensorBus
             except Exception as e:
-                log.error('Error initializing %s: %s',sensorName,e)
+                print('Error initializing %s: %s',sensorName,e)
                 return -1
    
     def read_sensor(self, sensor, sensorBus, sensorName, i2cTransceiver = None, sensorModel = None, temp = None, hum = None):    
@@ -55,7 +54,7 @@ class SensorHandler:
                 return data
             except Exception as e:
                 i2cTransceiver.close()
-                log.error('Error reading %s: %s',sensorName,e)
+                print('Error reading %s: %s',sensorName,e)
                 return -999
                 
         elif i2cTransceiver != None and sensorModel == None: # SHT
@@ -64,7 +63,7 @@ class SensorHandler:
                 return data
             except Exception as e:
                 i2cTransceiver.close()
-                log.error('Error reading %s: %s',sensorName,e)
+                print('Error reading %s: %s',sensorName,e)
                 return -999
                 
         else: # CO2, PM, BAT
@@ -72,7 +71,7 @@ class SensorHandler:
                 data = sensor.read(sensorBus) 
                 return data
             except Exception as e:
-                log.error('Error reading %s: %s',sensorName,e)
+                print('Error reading %s: %s',sensorName,e)
                 return -999
                 
     def handler(self):
@@ -118,21 +117,21 @@ class SensorHandler:
         self.busCM1107 = self.init_sensor(sensorCO2, busNR_CM1107 , 'CM1107')
         if self.busCM1107 != -1:
             dataCO2 = self.read_sensor(sensorCO2, self.busCM1107, 'CM1107')
-            log.debug('dataCO2: %s',dataCO2)
+            print('dataCO2: %s',dataCO2)
 
             
         # PM
         self.busPM2008 = self.init_sensor(sensorPM2008, busNR_PM2008, 'PM2008') 
         if self.busPM2008 != -1:
             dataPM2008 = self.read_sensor(sensorPM2008, self.busPM2008, 'PM2008')
-            log.debug('dataPM2008: %s',dataPM2008)
+            print('dataPM2008: %s',dataPM2008)
       
 
         # RHT
         self.busRHText, self.i2cTransceiver_sht = self.init_sensor(sensorRHT, busNR_RHT, 'SHT30', addr = Z7N904R_SHT30_ADDR) 
         if self.busRHText != -1 and self.i2cTransceiver_sht != -1:
             dataRHT = self.read_sensor(sensorRHT, self.busRHText, 'SHT30', i2cTransceiver = self.i2cTransceiver_sht)
-            log.debug('dataRHT: %s',dataRHT)
+            print('dataRHT: %s',dataRHT)
         
 
         # RHT + VOC
@@ -141,36 +140,36 @@ class SensorHandler:
             dataRHT_internal = self.read_sensor(sensorRHT, self.busRHT, 'SHT40', i2cTransceiver = self.i2cTransceiver_sht40)
             if dataRHT_internal != -999:
                 temp_voc, hum_voc = dataRHT_internal[0], dataRHT_internal[1]
-                log.debug("Temp on board: %f", temp_voc)
-                log.debug("Hum on board: %f", hum_voc)
-                log.debug("Temperature and humidity data for voc are obtained from onboard sensors")
+                print("Temp on board: %f", temp_voc)
+                print("Hum on board: %f", hum_voc)
+                print("Temperature and humidity data for voc are obtained from onboard sensors")
             else:
                 if dataRHT != -999:
                     temp_voc, hum_voc = dataRHT[0], dataRHT[1]
-                    log.debug("Temp external: %f", temp_voc)
-                    log.debug("Hum external: %f", hum_voc)
-                    log.debug("Temperature and humidity data for voc are obtained from external sensors")
+                    print("Temp external: %f", temp_voc)
+                    print("Hum external: %f", hum_voc)
+                    print("Temperature and humidity data for voc are obtained from external sensors")
                 else:
                     temp_voc, hum_voc = 25, 50
-                    log.debug("Temp external: %f", temp_voc)
-                    log.debug("Hum external: %f", hum_voc)
-                    log.debug("Temperature and humidity data for voc are set to default values")
+                    print("Temp external: %f", temp_voc)
+                    print("Hum external: %f", hum_voc)
+                    print("Temperature and humidity data for voc are set to default values")
         else:
             if dataRHT != -999:
                 temp_voc, hum_voc = dataRHT[0], dataRHT[1]
-                log.debug("Temp external: %f", temp_voc)
-                log.debug("Hum external: %f", hum_voc)
-                log.debug("Temperature and humidity data for voc are obtained from external sensors")
+                print("Temp external: %f", temp_voc)
+                print("Hum external: %f", hum_voc)
+                print("Temperature and humidity data for voc are obtained from external sensors")
             else:
                 temp_voc, hum_voc = 25, 50
-                log.debug("Temp external: %f", temp_voc)
-                log.debug("Hum external: %f", hum_voc)
-                log.debug("Temperature and humidity data for voc are set to default values")
+                print("Temp external: %f", temp_voc)
+                print("Hum external: %f", hum_voc)
+                print("Temperature and humidity data for voc are set to default values")
         
         self.busTVOC, self.i2cTransceiver_sgp = self.init_sensor(sensorTVOC2, busNR_TVOC, 'SGP41', sensorModel = 'SGP41', conditioning=False) 
         if self.busTVOC != -1 and self.i2cTransceiver_sgp != -1:
             dataSGP4x = self.read_sensor(sensorTVOC2, self.busTVOC, 'SGP41', i2cTransceiver = self.i2cTransceiver_sgp, sensorModel =  'SGP41', temp = temp_voc, hum = hum_voc)
-            log.debug('dataSGP4x: %s',dataSGP4x)
+            print('dataSGP4x: %s',dataSGP4x)
             
         
         # Battery
@@ -183,8 +182,8 @@ class SensorHandler:
             self.__is_battery_controller_busy = False
             if resp_read_battery != -999:
                 dataBAT, dataBATState = resp_read_battery[0], resp_read_battery[1]
-                log.debug('dataBAT: %s',dataBAT)
-                log.debug('dataBATState: %s',dataBATState)
+                print('dataBAT: %s',dataBAT)
+                print('dataBATState: %s',dataBATState)
 
 
 
@@ -231,8 +230,8 @@ class SensorHandler:
             self.__is_battery_controller_busy = False
             if resp_read_battery != -999:
                 dataBAT, dataBATState = resp_read_battery[0], resp_read_battery[1]
-                log.debug('dataBAT: %s',dataBAT)
-                log.debug('dataBATState: %s',dataBATState)
+                print('dataBAT: %s',dataBAT)
+                print('dataBATState: %s',dataBATState)
         
         self.batData['STT_BATTERY_LEVEL'] = dataBAT
         self.batData['STT_CAIR_BATTERY_STATUS'] = dataBATState        
@@ -244,9 +243,9 @@ def main():
     #while(1):
     try:
         sensor_data = sensor_object.handler()
-        log.info('Measurements: %s',sensor_data)
+        print('Measurements: %s',sensor_data)
     except Exception as e:
-        log.error('An error occurred: %s',e)
+        print('An error occurred: %s',e)
 
 if __name__ == '__main__':
     main()

@@ -1,0 +1,22 @@
+[Unit]
+Description=Artlite Opaq APP
+RequiresMountsFor=/run
+After=cair-app.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=root
+Group=root
+PermissionsStartOnly=true
+StandardError=journal
+StandardOutput=journal
+WorkingDirectory=/usr/local/artlite-opaq-app
+ExecStartPre=/bin/sleep 120
+ExecStartPre=/bin/systemctl stop cair-app.service
+ExecStart=/usr/bin/python3.10 /usr/local/artlite-opaq-app/src/main.py
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

@@ -6,7 +6,6 @@ if sys.version_info[:2] == (3,10):
 else:
     import smbus
 import argparse
-from config import log
 import csv
 import time
 import json
@@ -57,7 +56,7 @@ def set_adc_state(bus, state):
     updated_adc_en = (updated_reg15_value >> ADC_EN_BIT) & 0x01
     # Print the new state of the ADC
     #!if DEBUG: print("ADC is now {}".format("enabled" if updated_adc_en else "disabled"))
-    if DEBUG: log.info("ADC is now %s","enabled" if updated_adc_en else "disabled")
+    if DEBUG: print("ADC is now %s","enabled" if updated_adc_en else "disabled")
 def set_max_cell_voltage(bus, voltage):
     REG00_ADDRESS = 0x00
     reg00_value = bus.read_byte_data(BQ25887, REG00_ADDRESS)
@@ -145,19 +144,19 @@ def toggle_en_chg(bus):
     en_chg = (reg06_value >> 3) & 0x01
     new_reg06_value = reg06_value ^ (1 << 3)  # toggle the EN_CHG bit
     bus.write_byte_data(BQ25887, REG06_ADDRESS, new_reg06_value)
-    log.debug("EN_CHG register toggled from %s to %s.",en_chg, (new_reg06_value >> 3) & 0x01)
+    print("EN_CHG register toggled from %s to %s.",en_chg, (new_reg06_value >> 3) & 0x01)
 
     # Set the EN_CHG bit back to 1
     new_reg06_value |= (1 << 3)
     bus.write_byte_data(BQ25887, REG06_ADDRESS, new_reg06_value)
-    log.debug("EN_CHG register set back to 1.")
+    print("EN_CHG register set back to 1.")
 
 def get_vbus_ovp_stat(bus):
     REG11_ADDRESS = 0x11
     reg0e_value = bus.read_byte_data(BQ25887, REG11_ADDRESS)
     vbus_ovp_stat = (reg0e_value >> 7) & 0x01
     if vbus_ovp_stat:
-        log.info("Device in over-voltage protection")
+        print("Device in over-voltage protection")
         return 3
     else:
         return 1  # Normal
@@ -167,7 +166,7 @@ def get_tshut_stat(bus):
     reg0e_value = bus.read_byte_data(BQ25887, REG0E_ADDRESS)
     tshut_stat = (reg0e_value >> 6) & 0x01
     if tshut_stat:
-        log.info("Device in thermal shutdown protection")
+        print("Device in thermal shutdown protection")
         return 3
     else:
         return 1  # Normal
@@ -177,7 +176,7 @@ def get_tmr_stat(bus):
     reg0e_value = bus.read_byte_data(BQ25887, REG0E_ADDRESS)
     tmr_stat = (reg0e_value >> 4) & 0x01
     if tmr_stat:
-        log.info("Charge safety timer expired")
+        print("Charge safety timer expired")
         return 3
     else:
         return 1  # Normal
@@ -640,7 +639,7 @@ def readAll(bus):
     
     # charge_state = get_charging_status(bus)
     # print(charge_state)
-    # log.info("Charge Status is: " + str(charge_state))
+    # print("Charge Status is: " + str(charge_state))
     
     bus.close()    
     # perV = 100*(VBATint-3500*2)/(4200*2-3500*2)
@@ -656,7 +655,7 @@ def read(bus):
     set_max_cell_voltage(bus, 4.15)
     
     vbat_voltage = read_vbat_voltage(bus)
-    log.debug("VBAT voltage: %s",str(vbat_voltage))
+    print("VBAT voltage: %s",str(vbat_voltage))
 
     charge_state = get_charging_status(bus)
     power_state = get_power_status(bus)
@@ -667,21 +666,21 @@ def read(bus):
     reg06_value = bus.read_byte_data(BQ25887, REG06_ADDRESS)
     en_chg = (reg06_value >> 3) & 0x01
     
-    log.debug("VBAT is: %s", str(vbat_voltage))
+    print("VBAT is: %s", str(vbat_voltage))
     
     min_voltage_V = 7500  # Minimum voltage of the two NR18650-35E batteries in series (to be discuss with Mustafa Güleryüz)
     max_voltage_V = 8000  # Maximum voltage of the two NR18650-35E batteries in series
     
     if vbat_voltage < max_voltage_V and  charge_state == 0:
-        log.debug("Before Toggle Charge Status is: %s", str(charge_state))
-        log.debug("Battery voltage is below threshold, toggling EN_CHG register...")
+        print("Before Toggle Charge Status is: %s", str(charge_state))
+        print("Battery voltage is below threshold, toggling EN_CHG register...")
         toggle_en_chg(bus)
         delay_sec(0xFFFF)
         charge_state = get_charging_status(bus)
-        log.debug("After Toggle Charge Status is: %s", str(charge_state))
+        print("After Toggle Charge Status is: %s", str(charge_state))
     
     charge_state = get_charging_status(bus)  # get the updated charging status
-    log.debug("Charge Status is: %s", str(charge_state))
+    print("Charge Status is: %s", str(charge_state))
 
     
     full_bat_percent = 100
@@ -695,10 +694,10 @@ def read(bus):
         perV = full_bat_percent
         
 
-    log.debug("Battery Level: %s", str(perV))
+    print("Battery Level: %s", str(perV))
 
     if (charge_state == 0 or power_state == 0) and (vovp_state != 3 and tmr_state != 3 and thermal_state != 3 ):
-        log.debug("Charging status: 0 and Power status with no FAULT means not plugged ")
+        print("Charging status: 0 and Power status with no FAULT means not plugged ")
         battery_status = 0
         set_adc_state(bus, ADC_OFF) 
         bus.close()
@@ -707,17 +706,17 @@ def read(bus):
 
     elif (charge_state == 1 or charge_state == 4) and power_state == 1:
         if (charge_state == 4) :
-            log.debug("Charge Status is: %s", str(charge_state))
-            log.debug("Power Status is: %s", str(power_state))  
-            log.debug("Trickle or Pre-Charge mode")
+            print("Charge Status is: %s", str(charge_state))
+            print("Power Status is: %s", str(power_state))  
+            print("Trickle or Pre-Charge mode")
             battery_status = 1 
             set_adc_state(bus, ADC_OFF) 
             bus.close()
             return 0, battery_status
         else:
-            log.debug("Charge Status is: %s", str(charge_state))
-            log.debug("Power Status is: %s", str(power_state))      
-            log.debug("Fast or upper stage charging")
+            print("Charge Status is: %s", str(charge_state))
+            print("Power Status is: %s", str(power_state))      
+            print("Fast or upper stage charging")
             battery_status = 1 
             set_adc_state(bus, ADC_OFF) 
             bus.close()
@@ -726,31 +725,31 @@ def read(bus):
     elif (charge_state == 1 or charge_state == 2) or (power_state == 1 or power_state == 2):
 
         if perV >= full_bat_percent:
-            log.debug("Charging status: %100 or more than capacity")
+            print("Charging status: %100 or more than capacity")
             battery_status = 1
             perV = full_bat_percent
             bus.close()
             return perV, battery_status
         else:
             battery_status = 1
-            log.debug("Charging status: Not %100 almost capacity")
+            print("Charging status: Not %100 almost capacity")
             bus.close()
             return perV, battery_status
         
     elif (charge_state == 3 or power_state == 3) and (vovp_state == 3 or tmr_state == 3 or thermal_state == 3 ):
         battery_status = 3
-        log.debug("Charging status: 3 or Power status: 3 means --RESERVED-- ")
+        print("Charging status: 3 or Power status: 3 means --RESERVED-- ")
         bus.close()
         return fault_code, battery_status
     elif (charge_state == 0 and (power_state == 0 or power_state == 1)) and (vovp_state == 3 or tmr_state == 3 or thermal_state == 3):
         
-        #log.info("Charge Status is: %s", str(charge_state))
-        #log.info("Power Status is: %s", str(power_state))
-        #log.info("Vovp Status is: %s", str(vovp_state))
-        #log.info("TMR Status is: %s", str(tmr_state))
-        #log.info("Thermal Status is: %s", str(thermal_state))
+        #print("Charge Status is: %s", str(charge_state))
+        #print("Power Status is: %s", str(power_state))
+        #print("Vovp Status is: %s", str(vovp_state))
+        #print("TMR Status is: %s", str(tmr_state))
+        #print("Thermal Status is: %s", str(thermal_state))
         battery_status = 3
-        log.error("Charging status: --FAULT-- ")
+        print("Charging status: --FAULT-- ")
         set_adc_state(bus, ADC_OFF) 
         bus.close()
         return fault_code, battery_status
@@ -801,8 +800,8 @@ def main():
     read(bus)
     bus = init(0)
     perV, battery_status = read(bus)
-    log.info("perV is: %s", str(perV))
-    log.info("battery_status is: %s", str(battery_status))
+    print("perV is: %s", str(perV))
+    print("battery_status is: %s", str(battery_status))
     while True:
         perV, battery_status = read(bus)
         with open("/home/cairapp/battery_status.txt", "a") as file:

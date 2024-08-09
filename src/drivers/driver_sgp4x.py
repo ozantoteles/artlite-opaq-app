@@ -8,8 +8,7 @@ from sensirion_i2c_sgp4x import Sgp40I2cDevice
 from sensirion_i2c_sgp4x import Sgp41I2cDevice
 from subprocess import check_output
 
-sys.path.insert(0, "/usr/local/cair-app/")
-from config import log
+
 
 if sys.version_info[:3] == (2,7,14) or sys.version_info[:3] == (3,5,3):
     py3x_version = str(5)
@@ -53,30 +52,27 @@ def init(busNO, sensorName, sensorModel, conditioning=False):
                     time.sleep(1)
                     sraw_voc = sgp4x.conditioning()
                     # use default formatting for printing output:
-                    log.debug("SRAW VOC: %s \t\tSRAW NOx: conditioning",sraw_voc)
+
                 time.sleep(1) # After calling the conditioning command and after a subsequent minimum waiting time of 50 ms
     except:
-        log.error("Error initializing %s.", sensorName)
+
         i2c_transceiver_sgp.close()
         return -1, -1       
 
-    log.debug("%s initialized successfully.",sensorName)
+
     
     return sgp4x, i2c_transceiver_sgp
     
 
 def read(sensor, i2cTransceiver, sensorModel, temperature = 25.0, humidity = 50.0):
-    
-    log.debug('temperature: %s', temperature)
-    log.debug('humidity: %s', humidity)
+
     
     sgp4x_data = {}
     if sensorModel == "SGP40":
         sraw_voc = sensor.measure_raw(temperature, humidity)
-        log.debug('sraw_voc: %s', sraw_voc)
-        log.debug('sraw_voc ticks: %d', sraw_voc.ticks)
 
-        cmd = "python3." + py3x_version + " /usr/local/cair-app/drivers/sgpidx_p3.py " + "VOC" + " " + str(sraw_voc) + " " + str(vocBufferSize) + " " + vocBufferFolder + " " + vocBufferFile
+
+        cmd = "python3." + py3x_version + " /usr/local/artlite-opaq-app/src/drivers/sgpidx_p3.py " + "VOC" + " " + str(sraw_voc) + " " + str(vocBufferSize) + " " + vocBufferFolder + " " + vocBufferFile
         VOCindex = check_output(cmd, shell=True)
         voc_data = int(VOCindex)
         nox_data = -999
@@ -85,15 +81,12 @@ def read(sensor, i2cTransceiver, sensorModel, temperature = 25.0, humidity = 50.
     
     elif sensorModel == "SGP41":
         sraw_voc, sraw_nox = sensor.measure_raw(temperature, humidity)
-        log.debug('sraw_voc: %s', sraw_voc)
-        log.debug('sraw_voc ticks: %d', sraw_voc.ticks)
-        log.debug('sraw_nox: %s', sraw_nox)
-        log.debug('sraw_nox ticks: %d', sraw_nox.ticks)
 
-        cmd = "python3." + py3x_version + " /usr/local/cair-app/drivers/sgpidx_p3.py " + "VOC" + " " + str(sraw_voc) + " " + str(vocBufferSize) + " " + vocBufferFolder + " " + vocBufferFile
+
+        cmd = "python3." + py3x_version + " /usr/local/artlite-opaq-app/src/drivers/sgpidx_p3.py " + "VOC" + " " + str(sraw_voc) + " " + str(vocBufferSize) + " " + vocBufferFolder + " " + vocBufferFile
         VOCindex = check_output(cmd, shell=True)
         
-        cmd = "python3." + py3x_version + " /usr/local/cair-app/drivers/sgpidx_p3.py " + "NOX" + " " + str(sraw_nox) + " " + str(noxBufferSize) + " " + noxBufferFolder + " " + noxBufferFile
+        cmd = "python3." + py3x_version + " /usr/local/artlite-opaq-app/src/drivers/sgpidx_p3.py " + "NOX" + " " + str(sraw_nox) + " " + str(noxBufferSize) + " " + noxBufferFolder + " " + noxBufferFile
         NOXindex = check_output(cmd, shell=True)
 
         voc_data = int(VOCindex)
@@ -163,22 +156,15 @@ def main():
         if sensor_model == "SGP40":
             sgp40, i2c_transceiver_sgp = init(SGP4x_ADDR_BUS_NO, "SGP40", sensor_model, conditioning=True)
             sgp40_data = read(sgp40, i2c_transceiver_sgp, sensor_model)
-            log.debug('SGP40 VOC INDEX: %d', sgp40_data[0])
-            log.debug('SGP40 NOX INDEX: %d', sgp40_data[1])
-            log.debug('SGP40 SRAW VOC: %d', sgp40_data[2])
-            log.debug('SGP40 SRAW NOX: %d', sgp40_data[3])
-            
+
         elif sensor_model == "SGP41":
             sgp41, i2c_transceiver_sgp  = init(SGP4x_ADDR_BUS_NO, "SGP41", sensor_model, conditioning=True)
             sgp41_data = read(sgp41, i2c_transceiver_sgp, sensor_model)
-            log.debug('SGP41 VOC INDEX: %d', sgp41_data[0])
-            log.debug('SGP41 NOX INDEX: %d', sgp41_data[1])
-            log.debug('SGP41 SRAW VOC: %d', sgp41_data[2])
-            log.debug('SGP41 SRAW NOX: %d', sgp41_data[3])
+
         
     
     except Exception as e:
-        log.error('An error occurred: %s', str(e))
+       print('An error occurred: %s', str(e))
 
     return 0
 

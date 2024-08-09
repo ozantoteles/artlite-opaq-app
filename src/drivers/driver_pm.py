@@ -3,15 +3,12 @@
 import argparse
 import sys
 import json
-import logging
 
 if sys.version_info[:2] == (3, 10):
     import smbus2 as smbus
 else:
     import smbus
     
-sys.path.insert(0, "/usr/local/cair-app/")
-from config import log
 
 
 # I2C address
@@ -187,7 +184,6 @@ def main():
     bus = init(0)
     pm2008_data = read(bus)
     
-    log.info('PM 2008 sensor values: %s', pm2008_data)
     
     return 0
 

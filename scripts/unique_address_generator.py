@@ -71,7 +71,7 @@ def update_device_config(unique_id, mac_address, json_file_path):
 # Path to the unique ID JSON file
 unique_id_json_file_path = '/tmp/meta_files/UNIQUE_ID/id-displayboard.json'
 # Path to the device configuration JSON file
-device_config_json_file_path = 'config/device_config.json'
+device_config_json_file_path = '/usr/local/artlite-opaq-app/config/device_config.json'
 
 # Read the unique ID from the JSON file
 with open(unique_id_json_file_path, 'r') as file:
