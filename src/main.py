@@ -314,47 +314,90 @@ if __name__ == "__main__":
 
     if device_id in unique_ids:
         print(f"Device ID {device_id} found in configuration.")
-        while True:
-            try:
-                uniqueAddr_str = unique_ids[device_id]["uniqueAddr"]
-                channel_str = unique_ids[device_id]["channel"]
 
-                # Convert the strings to hexadecimal integers
-                channel = int(channel_str, 16)
-                unique_addr_hex = int(uniqueAddr_str, 16)
+        if unique_ids[device_id]["devType"] == "sender":
+            while True:
+                try:
+                    uniqueAddr_str = unique_ids[device_id]["customAddr"]
+                    channel_str = unique_ids[device_id]["channel"]
 
-                # Parse uniqueAddr hex into low and high bytes
-                ADDL = unique_addr_hex & 0xFF  # Extract the low byte
-                ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
+                    # Convert the strings to hexadecimal integers
+                    channel = int(channel_str, 16)
+                    unique_addr_hex = int(uniqueAddr_str, 16)
 
-                # Log the results
-                print(f"Channel Hex: {channel:#x}")
-                print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
-                print(f"UniqueAddr Low Byte: {ADDL:#x}")
-                print(f"UniqueAddr High Byte: {ADDH:#x}")
+                    # Parse uniqueAddr hex into low and high bytes
+                    ADDL = unique_addr_hex & 0xFF  # Extract the low byte
+                    ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
 
-                with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
-                    configure_lora(ser, ADDH, ADDL, channel)
+                    # Log the results
+                    print(f"Channel Hex: {channel:#x}")
+                    print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
+                    print(f"UniqueAddr Low Byte: {ADDL:#x}")
+                    print(f"UniqueAddr High Byte: {ADDH:#x}")
 
-                    # Flush any stale data in the buffers
-                    ser.flushInput()
-                    ser.flushOutput()
+                    with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                        configure_lora(ser, ADDH, ADDL, channel)
 
-                    time.sleep(1)
+                        # Flush any stale data in the buffers
+                        ser.flushInput()
+                        ser.flushOutput()
 
-                    send_data(ser, device_id)
+                        time.sleep(1)
 
-                    time.sleep(5)
+                        send_data(ser, device_id)
 
-            except KeyError as e:
-                print(f"Configuration for device ID {device_id} is incomplete: {e}")
-                break  # Exit loop if configuration is missing key data
-            except serial.SerialException as e:
-                print(f"Serial communication error: {e}")
-                time.sleep(10)  # Wait and retry if there's a serial error
-            except Exception as e:
-                print(f"Unexpected error: {e}")
-                time.sleep(10)  # Wait and retry in case of unexpected errors
+                        time.sleep(5)
+
+                except KeyError as e:
+                    print(f"Configuration for device ID {device_id} is incomplete: {e}")
+                    break  # Exit loop if configuration is missing key data
+                except serial.SerialException as e:
+                    print(f"Serial communication error: {e}")
+                    time.sleep(10)  # Wait and retry if there's a serial error
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
+                    time.sleep(10)  # Wait and retry in case of unexpected errors
+        else:
+            uniqueAddr_str = unique_ids[device_id]["customAddr"]
+            channel_str = unique_ids[device_id]["channel"]
+
+            # Convert the strings to hexadecimal integers
+            channel = int(channel_str, 16)
+            unique_addr_hex = int(uniqueAddr_str, 16)
+
+            # Parse uniqueAddr hex into low and high bytes
+            ADDL = unique_addr_hex & 0xFF  # Extract the low byte
+            ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
+            print(f"Channel Hex: {channel:#x}")
+            print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
+            print(f"UniqueAddr Low Byte: {ADDL:#x}")
+            print(f"UniqueAddr High Byte: {ADDH:#x}")
+            with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                configure_lora(ser, ADDH, ADDL, channel)
+            while True:
+                try:
+                    with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                        ser.flushInput()
+                        ser.flushOutput()
+
+                        time.sleep(1)
+
+                        data = ser.read(ser.in_waiting)
+                        hex_data = data.hex()
+                        print(f"Received Data: {hex_data}")
+
+                        time.sleep(1)
+
+                except KeyError as e:
+                    print(f"Configuration for device ID {device_id} is incomplete: {e}")
+                    break  # Exit loop if configuration is missing key data
+                except serial.SerialException as e:
+                    print(f"Serial communication error: {e}")
+                    time.sleep(10)  # Wait and retry if there's a serial error
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
+                    time.sleep(10)  # Wait and retry in case of unexpected errors
+
     else:
         print(f"Device ID {device_id} not found in configuration.")
 

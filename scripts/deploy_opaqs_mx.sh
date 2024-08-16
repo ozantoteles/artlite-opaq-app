@@ -24,7 +24,7 @@ else
 fi
  
 # Loop through each target and copy the tarball
-for target in 192.168.1.136; do
+for target in  192.168.1.136 192.168.1.137; do
   echo "Copying to $target..."
   eval $(printf "$COPY_CMD" "$target")
   echo "Extracting on $target..."

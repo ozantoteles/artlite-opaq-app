@@ -77,12 +77,25 @@
         "cryptH": "0x00",
         "cryptL": "0x00"
     },
-    "2e2f39d7": {
-        "macAddr": "D0:17:69:9F:F2:5C",
+    "0d0d51d7": {
+        "macAddr": "58:D5:0A:A1:28:3F",
         "devType": "sender",
         "channel": "0x17",
+        "uniqueAddr": "0x14B1",
+        "customAddr": "0x14B1",
+        "reg0": "0x62",
+        "reg1": "0x00",
+        "reg2": "0x17",
+        "reg3": "0x00",
+        "cryptH": "0x00",
+        "cryptL": "0x00"
+    },
+    "2e2f39d7": {
+        "macAddr": "D0:17:69:9F:F2:5C",
+        "devType": "receiver",
+        "channel": "0x17",
         "uniqueAddr": "0x7BD6",
-        "customAddr": "0x7BD6",
+        "customAddr": "0xFFFF",
         "reg0": "0x62",
         "reg1": "0x00",
         "reg2": "0x17",
