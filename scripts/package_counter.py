@@ -6,7 +6,7 @@ def count_packets(file_path):
     
     with open(file_path, 'r') as file:
         for line in file:
-            match = re.search(r'Field1\': \'\"([a-fA-F0-9]+) \*', line)
+            match = re.search(r"'UniqueID':\s*'\"([a-fA-F0-9]+)", line)
             if match:
                 identifier = match.group(1)
                 packet_counts[identifier] += 1
@@ -14,7 +14,7 @@ def count_packets(file_path):
     return packet_counts
 
 def main():
-    file_path = 'lora_output.txt'  # Replace with your file path
+    file_path = '/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt'  # Updated with your file path
     packet_counts = count_packets(file_path)
     
     print("Packet counts per unique identifier:")

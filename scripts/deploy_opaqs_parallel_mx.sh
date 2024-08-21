@@ -23,22 +23,27 @@ else
     COPY_CMD="scp $TEMP_DIR/$TARBALL_NAME root@%s:/usr/local/"
 fi
  
-# Loop through each target and copy the tarball
-#for target in  192.168.1.110; do
-for target in  192.168.1.110 192.168.1.104 192.168.1.186 192.168.1.102 192.168.1.125 192.168.1.122 192.168.1.126 192.168.1.109 192.168.1.100 192.168.1.127 192.168.1.128; do
-#for target in  192.168.1.102 192.168.1.128 192.168.1.127 192.168.1.128; do
+# Function to handle the operations for a single target
+process_target() {
+  local target=$1
   echo "Copying to $target..."
   eval $(printf "$COPY_CMD" "$target")
   echo "Extracting on $target..."
   ssh -o ForwardX11=no root@$target "tar -xzf /usr/local/$TARBALL_NAME -C /usr/local/ && rm /usr/local/$TARBALL_NAME"
   echo "Done with $target."
-  #ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
-  #echo 'Systemd service restarted.'
+  ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
+  echo "Systemd service restarted on $target."
+}
 
+# Loop through each target and copy the tarball in parallel
+for target in 192.168.1.110 192.168.1.104 192.168.1.186 192.168.1.102 192.168.1.125 192.168.1.122 192.168.1.126 192.168.1.109 192.168.1.100 192.168.1.127 192.168.1.128; do
+  process_target $target &
 done
- 
+
+# Wait for all background processes to complete
+wait
+
 # Clean up the local tarball
 rm -r $TEMP_DIR
  
 echo "All tasks completed."
- 

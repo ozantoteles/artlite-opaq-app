@@ -5,3 +5,4 @@
 __pycache__/
 
 device_config.json
+scripts/lora_output.txt

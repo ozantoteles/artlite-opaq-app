@@ -2,6 +2,7 @@ import random
 import serial
 import time
 import json
+import os
 from sensorUtils import SensorHandler
 from functionAQI import getQuality
 
@@ -232,7 +233,7 @@ def send_data(ser, device_id):
     try:
         # Define the start and end delimiters
         start_delimiter = b'\xcb\xda'
-        end_delimiter = b'\xbc'
+        end_delimiter = b'\xbc\x0a'
         
         # Example data to send
         # Generate random data payload (e.g., 3 bytes)
@@ -240,7 +241,7 @@ def send_data(ser, device_id):
         #data_payload = device_id.encode('utf-8')
         # Create the full message
         #full_message = start_delimiter + data_payload + end_delimiter
-        message = device_id + " " + read_sensor()
+        message = device_id + read_sensor()
         # Send the message
         #while True:
         print(f"Sent Data: {message}")
@@ -279,7 +280,7 @@ def read_sensor():
     sttCairHealthLevel, sttCairHealthStatus = getQuality("/usr/local/artlite-opaq-app/data/AQI.json",dataNO2,dataVOC,dataPM10,dataPM1_0,dataCO2,dataPM2_5)
     
     serial_message = (
-        "*A" +
+        ";" +
         str(int(dataTemp)) + ";" +
         str(int(dataHum)) + ";" +
         str(dataCO2) + ";" +
@@ -288,7 +289,7 @@ def read_sensor():
         str(dataPM1_0) + ";" +
         str(dataPM2_5) + ";" +
         str(dataPM10) + ";" +
-        str(int(sttCairHealthLevel)) + "B#"
+        str(int(sttCairHealthLevel))
     )
     
     return serial_message
@@ -297,7 +298,7 @@ def parse_lora_data(data):
     # Ensure we are working only with the hex part of the message
     if data.startswith('cbda') and data.endswith('bc'):
         # Remove the 'cbda' prefix and 'bc' suffix
-        hex_string = data[4:-2]
+        hex_string = data[4:-4]
     else:
         return {"error": "Invalid message format"}
     
@@ -313,18 +314,49 @@ def parse_lora_data(data):
     # Assuming the format is fixed, assign values to their respective keys
     # The keys below are arbitrary; replace them with appropriate labels as needed
     parsed_data = {
-        "Field1": values[0],
-        "Field2": values[1],
-        "Field3": values[2],
-        "Field4": values[3],
-        "Field5": values[4],
-        "Field6": values[5],
-        "Field7": values[6],
-        "Field8": values[7],
-        "Field9": values[8] if len(values) > 8 else None,  # Handle cases with fewer fields
+        "UniqueID": values[0],
+        "Temperature": values[1],
+        "Humidity": values[2],
+        "CO2": values[3],
+        "VOC": values[4],
+        "NOx": values[5],
+        "PM1": values[6],
+        "PM2_5": values[7],
+        "PM10": values[8],
+        "AQI": values[9] if len(values) > 9 else None,  # Handle cases with fewer fields
     }
     
     return parsed_data
+
+def log_with_size_limit(log_file_path, log_entry, max_size_mb=10):
+    """
+    Appends a log entry to the log file and ensures the file size does not exceed max_size_mb.
+    
+    :param log_file_path: Path to the log file.
+    :param log_entry: The log entry string to append.
+    :param max_size_mb: Maximum allowed size of the log file in megabytes.
+    """
+    max_size_bytes = max_size_mb * 1024 * 1024
+    
+    # Append the new log entry
+    with open(log_file_path, 'a') as log_file:
+        log_file.write(log_entry + '\n')
+    
+    # Check current file size
+    current_size = os.path.getsize(log_file_path)
+    
+    if current_size <= max_size_bytes:
+        return  # Size is within limit, no action needed
+    
+    # Reduce file size by removing oldest lines
+    with open(log_file_path, 'r+') as log_file:
+        lines = log_file.readlines()
+        while current_size > max_size_bytes and lines:
+            lines.pop(0)  # Remove the oldest line
+            log_file.seek(0)
+            log_file.writelines(lines)
+            log_file.truncate()
+            current_size = os.path.getsize(log_file_path)
 
 
 if __name__ == "__main__":
@@ -421,13 +453,15 @@ if __name__ == "__main__":
                             # Process complete messages
                             while True:
                                 start_index = buffer.find(b'\xcb\xda')  # Example start delimiter
-                                end_index = buffer.find(b'\xbc')       # Example end delimiter
+                                end_index = buffer.find(b'\xbc\x0a')       # Example end delimiter
                                 
                                 if start_index != -1 and end_index != -1 and end_index > start_index:
                                     complete_message = buffer[start_index:end_index + 1]
                                     hex_data = complete_message.hex()
                                     print(f"Received Data: {hex_data}")
-                                    print(f"Parsed Data: {parse_lora_data(hex_data)}")
+                                    parsed_data = parse_lora_data(hex_data)
+                                    print(f"Parsed Data: {parsed_data}")
+                                    log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}")
                                     # Remove processed message from buffer
                                     buffer = buffer[end_index + 1:]
                                 else:
@@ -437,32 +471,6 @@ if __name__ == "__main__":
                 print(f"Error: {e}")
             except KeyboardInterrupt:
                 print("Stopped listening.")
-
-            '''
-            while True:
-                try:
-                    with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
-                        ser.flushInput()
-                        ser.flushOutput()
-
-                        time.sleep(1)
-
-                        data = ser.read(ser.in_waiting)
-                        hex_data = data.hex()
-                        print(f"Received Data: {hex_data}")
-
-                        time.sleep(1)
-
-                except KeyError as e:
-                    print(f"Configuration for device ID {device_id} is incomplete: {e}")
-                    break  # Exit loop if configuration is missing key data
-                except serial.SerialException as e:
-                    print(f"Serial communication error: {e}")
-                    time.sleep(10)  # Wait and retry if there's a serial error
-                except Exception as e:
-                    print(f"Unexpected error: {e}")
-                    time.sleep(10)  # Wait and retry in case of unexpected errors
-                '''
 
     else:
         print(f"Device ID {device_id} not found in configuration.")
