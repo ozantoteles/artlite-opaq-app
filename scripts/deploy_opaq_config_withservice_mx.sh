@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the source directory and tarball name
-SOURCE_DIR="/home/mobaxterm/ARTLITE-OPAQ-APP/artlite-opaq-app"
+SOURCE_DIR="/home/mobaxterm/artlite-opaq-app"
 TARBALL_NAME="artlite-opaq-app.tar.gz"
 TEMP_DIR="/tmp/artlite-opaq-app-tarball"
 
@@ -49,7 +49,7 @@ function ssh_execute {
 }
 
 # Loop through each target
-for target in 192.168.1.100 192.168.1.102 192.168.1.104 192.168.1.108 192.168.1.122 192.168.1.186; do
+for target in 192.168.1.100 192.168.1.109 192.168.1.126 192.168.1.127 192.168.1.128; do
   echo "Copying tarball and service file to $target..."
   # Copy the tarball and service file to the remote target
   scp $TEMP_DIR/$TARBALL_NAME root@$target:/usr/local/

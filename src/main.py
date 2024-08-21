@@ -3,7 +3,7 @@ import serial
 import time
 import json
 from sensorUtils import SensorHandler
-#from functionAQI import getQuality
+from functionAQI import getQuality
 
 
 
@@ -231,8 +231,8 @@ def configure_lora(serial_port, ADDH, ADDL, channel):
 def send_data(ser, device_id):
     try:
         # Define the start and end delimiters
-        start_delimiter = b'\x00\x00'
-        end_delimiter = b'\x44'
+        start_delimiter = b'\xcb\xda'
+        end_delimiter = b'\xbc'
         
         # Example data to send
         # Generate random data payload (e.g., 3 bytes)
@@ -240,7 +240,7 @@ def send_data(ser, device_id):
         #data_payload = device_id.encode('utf-8')
         # Create the full message
         #full_message = start_delimiter + data_payload + end_delimiter
-        message = read_sensor()
+        message = device_id + " " + read_sensor()
         # Send the message
         #while True:
         print(f"Sent Data: {message}")
@@ -251,7 +251,7 @@ def send_data(ser, device_id):
 
         # Step 4: Convert the bytes to a hexadecimal string
         hex_data = json_bytes.hex()
-        ser.write( bytes.fromhex(hex_data))
+        ser.write( start_delimiter + bytes.fromhex(hex_data) + end_delimiter )
         
         time.sleep(1)  # Send data every second for testing purposes
     except serial.SerialException as e:
@@ -265,7 +265,7 @@ def read_sensor():
 
     sensor_data = __sensor.handler()
     
-    '''
+    
     dataTemp = sensor_data["CAIRRHTLEVEL_EXTERNAL_TEMP"]
     dataHum = sensor_data["CAIRRHTLEVEL_EXTERNAL_HUM"]
     dataCO2 = sensor_data["CAIRCO2LEVEL"]
@@ -276,7 +276,7 @@ def read_sensor():
     dataPM10 = sensor_data["CAIRPM2008_10_TSI_LEVEL"]
 
     
-    sttCairHealthLevel, sttCairHealthStatus = getQuality("AQI.json",dataNO2,dataVOC,dataPM10,dataPM1_0,dataCO2,dataPM2_5)
+    sttCairHealthLevel, sttCairHealthStatus = getQuality("/usr/local/artlite-opaq-app/data/AQI.json",dataNO2,dataVOC,dataPM10,dataPM1_0,dataCO2,dataPM2_5)
     
     serial_message = (
         "*A" +
@@ -290,8 +290,42 @@ def read_sensor():
         str(dataPM10) + ";" +
         str(int(sttCairHealthLevel)) + "B#"
     )
-    '''
-    return sensor_data
+    
+    return serial_message
+
+def parse_lora_data(data):
+    # Ensure we are working only with the hex part of the message
+    if data.startswith('cbda') and data.endswith('bc'):
+        # Remove the 'cbda' prefix and 'bc' suffix
+        hex_string = data[4:-2]
+    else:
+        return {"error": "Invalid message format"}
+    
+    try:
+        # Decode the hex string into a string of ASCII characters
+        decoded_string = bytes.fromhex(hex_string).decode('ascii')
+    except ValueError:
+        return {"error": "Invalid hex data"}
+    
+    # Split the string into individual values by semicolon
+    values = decoded_string.split(";")
+    
+    # Assuming the format is fixed, assign values to their respective keys
+    # The keys below are arbitrary; replace them with appropriate labels as needed
+    parsed_data = {
+        "Field1": values[0],
+        "Field2": values[1],
+        "Field3": values[2],
+        "Field4": values[3],
+        "Field5": values[4],
+        "Field6": values[5],
+        "Field7": values[6],
+        "Field8": values[7],
+        "Field9": values[8] if len(values) > 8 else None,  # Handle cases with fewer fields
+    }
+    
+    return parsed_data
+
 
 if __name__ == "__main__":
     setup_pins("OFF")
@@ -374,6 +408,37 @@ if __name__ == "__main__":
             print(f"UniqueAddr High Byte: {ADDH:#x}")
             with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
                 configure_lora(ser, ADDH, ADDL, channel)
+
+            try:
+                with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                    
+                    buffer = bytearray()
+                    while True:
+                        if ser.in_waiting > 0:
+                            data = ser.read(ser.in_waiting)
+                            buffer.extend(data)
+                            
+                            # Process complete messages
+                            while True:
+                                start_index = buffer.find(b'\xcb\xda')  # Example start delimiter
+                                end_index = buffer.find(b'\xbc')       # Example end delimiter
+                                
+                                if start_index != -1 and end_index != -1 and end_index > start_index:
+                                    complete_message = buffer[start_index:end_index + 1]
+                                    hex_data = complete_message.hex()
+                                    print(f"Received Data: {hex_data}")
+                                    print(f"Parsed Data: {parse_lora_data(hex_data)}")
+                                    # Remove processed message from buffer
+                                    buffer = buffer[end_index + 1:]
+                                else:
+                                    break
+                            time.sleep(1)
+            except serial.SerialException as e:
+                print(f"Error: {e}")
+            except KeyboardInterrupt:
+                print("Stopped listening.")
+
+            '''
             while True:
                 try:
                     with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
@@ -397,6 +462,7 @@ if __name__ == "__main__":
                 except Exception as e:
                     print(f"Unexpected error: {e}")
                     time.sleep(10)  # Wait and retry in case of unexpected errors
+                '''
 
     else:
         print(f"Device ID {device_id} not found in configuration.")

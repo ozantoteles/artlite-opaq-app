@@ -221,8 +221,10 @@ class SensorHandler:
         # Battery
         dataBAT = -999
         dataBATState = -999
+        import time
+        
         while self.__is_battery_controller_busy:
-            pass
+            time.sleep(0.1)  # Sleep briefly to release the CPU
         self.__is_battery_controller_busy = True
         self.busBAT = self.init_sensor(batteryController, busNR_BAT, 'Battery')
         if self.busBAT != -1:

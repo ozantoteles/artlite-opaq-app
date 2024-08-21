@@ -1,6 +1,6 @@
 import json
 
-def getQuality(json_file="AQI.json", dataPM1_0=-1, dataRH_humid=-1, dataCO=-1, dataNO2=-1, dataCO2=-1, dataVOC=-1, dataPM10=-1, dataRH_dry=-1, dataPM2_5=-1, return_json=False):
+def getQuality(json_file="/usr/local/artlite-opaq-app/data/AQI.json", dataPM1_0=-1, dataRH_humid=-1, dataCO=-1, dataNO2=-1, dataCO2=-1, dataVOC=-1, dataPM10=-1, dataRH_dry=-1, dataPM2_5=-1, return_json=False):
     
     index_dictionary = {} # keeps index values of all parameters plus total index as dictionary then it is returned as json object
     normalized_values = [] # keeps all normalized index values for the given value as well as the corresponding quality info

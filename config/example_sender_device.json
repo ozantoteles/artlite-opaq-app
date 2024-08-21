@@ -1,0 +1,15 @@
+{
+    "492e39d7": {
+        "macAddr": "E8:4F:25:36:F4:44",
+        "devType": "sender",
+        "channel": "0x17",
+        "uniqueAddr": "0xB89E",
+        "customAddr": "0xB89E",
+        "reg0": "0x62",
+        "reg1": "0x00",
+        "reg2": "0x17",
+        "reg3": "0x00",
+        "cryptH": "0x00",
+        "cryptL": "0x00"
+    }
+}
