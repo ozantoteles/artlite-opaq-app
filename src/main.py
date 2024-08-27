@@ -3,6 +3,8 @@ import serial
 import time
 import json
 import os
+from datetime import datetime
+from collections import deque
 from sensorUtils import SensorHandler
 from functionAQI import getQuality
 
@@ -298,7 +300,7 @@ def parse_lora_data(data):
     # Ensure we are working only with the hex part of the message
     if data.startswith('cbda') and data.endswith('bc'):
         # Remove the 'cbda' prefix and 'bc' suffix
-        hex_string = data[4:-4]
+        hex_string = data[4:-4] ## -4 dogru mu
     else:
         return {"error": "Invalid message format"}
     
@@ -328,36 +330,52 @@ def parse_lora_data(data):
     
     return parsed_data
 
-def log_with_size_limit(log_file_path, log_entry, max_size_mb=10):
+def log_with_size_limit(log_file_path, log_entry, max_size_kb=100):
     """
-    Appends a log entry to the log file and ensures the file size does not exceed max_size_mb.
+    Appends a log entry with a timestamp to the log file and ensures the file size does not exceed max_size_kb.
     
     :param log_file_path: Path to the log file.
     :param log_entry: The log entry string to append.
-    :param max_size_mb: Maximum allowed size of the log file in megabytes.
+    :param max_size_kb: Maximum allowed size of the log file in kilobytes.
     """
-    max_size_bytes = max_size_mb * 1024 * 1024
+    max_size_bytes = max_size_kb * 1024
     
-    # Append the new log entry
-    with open(log_file_path, 'a') as log_file:
-        log_file.write(log_entry + '\n')
+    # Get the current timestamp and format it
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Check current file size
+    # Prepend the timestamp to the log entry
+    log_entry_with_timestamp = f"[{timestamp}] {log_entry}"
+    
+    # Append the new log entry with timestamp
+    with open(log_file_path, 'a+') as log_file:
+        log_file.write(log_entry_with_timestamp + '\n')
+        log_file.flush()
+
+    # Check if file size exceeds the limit
     current_size = os.path.getsize(log_file_path)
-    
+    print(f"Log file size after writing: {current_size} bytes (Limit: {max_size_bytes} bytes)")
+
     if current_size <= max_size_bytes:
+        print("File size is within limit, no truncation needed.")
         return  # Size is within limit, no action needed
-    
-    # Reduce file size by removing oldest lines
+
+    # If file size exceeds the limit, reduce file size by removing oldest lines
+    print("File size exceeded limit. Starting truncation process.")
     with open(log_file_path, 'r+') as log_file:
-        lines = log_file.readlines()
+        lines = deque(log_file)
+        
+        lines_removed = 0
         while current_size > max_size_bytes and lines:
-            lines.pop(0)  # Remove the oldest line
+            lines.popleft()  # Remove the oldest line
+            lines_removed += 1
             log_file.seek(0)
             log_file.writelines(lines)
             log_file.truncate()
+            log_file.flush()
             current_size = os.path.getsize(log_file_path)
-
+            print(f"Log file size after truncation: {current_size} bytes")
+        
+        print(f"Truncation complete. Lines removed: {lines_removed}")
 
 if __name__ == "__main__":
     setup_pins("OFF")
@@ -461,7 +479,7 @@ if __name__ == "__main__":
                                     print(f"Received Data: {hex_data}")
                                     parsed_data = parse_lora_data(hex_data)
                                     print(f"Parsed Data: {parsed_data}")
-                                    log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}")
+                                    log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}", 1000)
                                     # Remove processed message from buffer
                                     buffer = buffer[end_index + 1:]
                                 else:
