@@ -49,7 +49,8 @@ function ssh_execute {
 }
 
 # Loop through each target
-for target in 192.168.1.100 192.168.1.109 192.168.1.126 192.168.1.127 192.168.1.128; do
+for target in 192.168.1.128; do
+#for target in 192.168.1.114 192.168.1.115 192.168.1.120 192.168.1.121 192.168.1.123 192.168.1.129 192.168.1.130 192.168.1.118 192.168.1.131 192.168.1.132 192.168.1.110 192.168.1.104 192.168.1.186 192.168.1.102 192.168.1.125 192.168.1.122 192.168.1.126 192.168.1.109 192.168.1.100 192.168.1.127 192.168.1.128; do
   echo "Copying tarball and service file to $target..."
   # Copy the tarball and service file to the remote target
   scp $TEMP_DIR/$TARBALL_NAME root@$target:/usr/local/
@@ -83,6 +84,33 @@ for target in 192.168.1.100 192.168.1.109 192.168.1.126 192.168.1.127 192.168.1.
       python3.10 -m pip install pyserial
     else
       echo 'pyserial is already installed.'
+    fi
+
+    echo 'Checking for pyserial-asyncio installation...'
+    # Install pyserial-asyncio if not already installed
+    if ! python3.10 -m pip show pyserial-asyncio &>/dev/null; then
+      echo 'Installing pyserial-asyncio...'
+      python3.10 -m pip install pyserial-asyncio
+    else
+      echo 'pyserial-asyncio is already pyserial-asyncio.'
+    fi
+
+    echo 'Checking for pymodbus installation...'
+    # Install pymodbus if not already installed
+    if ! python3.10 -m pip show pymodbus &>/dev/null; then
+      echo 'Installing pymodbus...'
+      python3.10 -m pip install pymodbus
+    else
+      echo 'pymodbus is already installed.'
+    fi
+
+    echo 'Checking for pyudev installation...'
+    # Install pyudev if not already installed
+    if ! python3.10 -m pip show pyudev &>/dev/null; then
+      echo 'Installing pyudev...'
+      python3.10 -m pip install pyudev
+    else
+      echo 'pyudev is already installed.'
     fi
 
     echo 'Extracting tarball...'

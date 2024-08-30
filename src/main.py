@@ -7,11 +7,66 @@ from datetime import datetime
 from collections import deque
 from sensorUtils import SensorHandler
 from functionAQI import getQuality
+import pyudev
+import asyncio
+import serial_asyncio  # Requires pyserial-asyncio package
+from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext, ModbusSequentialDataBlock
+from pymodbus.server.async_io import StartAsyncSerialServer
+from pymodbus.transaction import ModbusRtuFramer
+from pymodbus.device import ModbusDeviceIdentification
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG,  # Set the logging level
+                    format='%(asctime)s - %(levelname)s - %(message)s',  # Define the log message format
+                    datefmt='%Y-%m-%d %H:%M:%S',  # Date format
+                    handlers=[
+                        logging.StreamHandler(),  # Log to console
+                        logging.FileHandler("app.log")  # Also log to a file named "app.log"
+                    ])
 
+device_mapping_path = "/usr/local/artlite-opaq-app/config/device_mapping.json"
+modbus_array = None
+modbus_device = None
+lora_device = None
+
+def get_ttyUSB_device(module_name):
+    # Define a mapping for USB paths to module names
+    module_mapping = {
+        'usb2/2-1': 'FTDI Module Connected to Lora Module',
+        'usb1/1-1': 'FTDI Module Connected to MODBUS Module',
+    }
+
+    # Reverse the mapping to lookup by module name
+    name_to_path = {v: k for k, v in module_mapping.items()}
+
+    # Check if the provided module name exists in the mapping
+    if module_name not in name_to_path:
+        raise ValueError(f"Module name '{module_name}' not found in mapping.")
+
+    target_path = name_to_path[module_name]
+
+    context = pyudev.Context()
+
+    # Iterate through all ttyUSB devices
+    for device in context.list_devices(subsystem='tty', ID_BUS='usb'):
+        # Get the parent device, which corresponds to the USB device
+        parent = device.find_parent(subsystem='usb')
+
+        if parent is not None:
+            # Extract only the usbX/X-Y part of the device path for mapping
+            usb_path_parts = parent.device_path.split('/')
+            usb_path = '/'.join(usb_path_parts[-3:-1])
+
+            # Check if this USB path matches the target path
+            if usb_path == target_path:
+                return device.device_node
+
+    # Return None if no matching device is found
+    return None
 
 def setup_pins(status):
-    print("Setting up pins...")
+    logging.debug("Setting up pins...")
     # USB2
     # Set USB2
     try:
@@ -21,7 +76,7 @@ def setup_pins(status):
             else:
                 f.write("0")
     except IOError as e:
-        print(f"Failed to set USB2: {e}")
+        logging.debug(f"Failed to set USB2: {e}")
     time.sleep(5)
     # Verify USB2
     try:
@@ -29,11 +84,11 @@ def setup_pins(status):
             usb2_status = f.read().strip()
             expected_usb2_status = "1" if status == "ON" else "0"
             if usb2_status == expected_usb2_status:
-                print(f"USB2 is correctly set to {status}")
+                logging.debug(f"USB2 is correctly set to {status}")
             else:
-                print(f"USB2 setup failed!")
+                logging.debug(f"USB2 setup failed!")
     except IOError as e:
-        print(f"Failed to read USB2: {e}")
+        logging.debug(f"Failed to read USB2: {e}")
 
     #LORA VCC
     # Set LoRa VCC
@@ -44,7 +99,7 @@ def setup_pins(status):
             else:
                 f.write("0")
     except IOError as e:
-        print(f"Failed to set LoRa VCC: {e}")
+        logging.debug(f"Failed to set LoRa VCC: {e}")
     time.sleep(1)
     # Verify LoRa VCC
     try:
@@ -52,35 +107,35 @@ def setup_pins(status):
             lora_status = f.read().strip()
             expected_lora_status = "4095" if status == "ON" else "0"
             if lora_status == expected_lora_status:
-                print(f"LoRa VCC is correctly set to {status}")
+                logging.debug(f"LoRa VCC is correctly set to {status}")
             else:
-                print(f"LoRa VCC setup failed!")
+                logging.debug(f"LoRa VCC setup failed!")
     except IOError as e:
-        print(f"Failed to read LoRa VCC: {e}")
+        logging.debug(f"Failed to read LoRa VCC: {e}")
 
 
 
 def set_mode(mode):
     if mode == "configuration":
-        print("Entering into configuration mode..")
+        logging.debug("Entering into configuration mode..")
         # M0
         # Set configuration mode m0
         try:
             with open('/sys/class/leds/red_cntrl/brightness', 'w') as f:
                 f.write("255")
         except IOError as e:
-            print(f"Failed to set m0 (red_cntrl): {e}")
+            logging.debug(f"Failed to set m0 (red_cntrl): {e}")
         # Verify configuration mode m0
         try:
             with open('/sys/class/leds/red_cntrl/brightness', 'r') as f:
                 m0_status = f.read().strip()
                 expected_m0_status = "255" 
                 if m0_status == expected_m0_status:
-                    print(f"m0 is correctly set to 255")
+                    logging.debug(f"m0 is correctly set to 255")
                 else:
-                    print(f"m0 setup failed!")
+                    logging.debug(f"m0 setup failed!")
         except IOError as e:
-            print(f"Failed to read m0: {e}")
+            logging.debug(f"Failed to read m0: {e}")
             
         # M1
         # Set configuration mode m1
@@ -88,39 +143,39 @@ def set_mode(mode):
             with open('/sys/class/leds/green_cntrl/brightness', 'w') as f:
                 f.write("255")
         except IOError as e:
-            print(f"Failed to set m1 (green_cntrl): {e}")
+            logging.debug(f"Failed to set m1 (green_cntrl): {e}")
         # Verify configuration mode m1
         try:
             with open('/sys/class/leds/green_cntrl/brightness', 'r') as f:
                 m0_status = f.read().strip()
                 expected_m0_status = "255" 
                 if m0_status == expected_m0_status:
-                    print(f"m1 is correctly set to 255")
+                    logging.debug(f"m1 is correctly set to 255")
                 else:
-                    print(f"m1 setup failed!")
+                    logging.debug(f"m1 setup failed!")
         except IOError as e:
-            print(f"Failed to read m1: {e}")
+            logging.debug(f"Failed to read m1: {e}")
 
     elif mode == "normal":
-        print("Entering into normal mode..")
+        logging.debug("Entering into normal mode..")
         # M0
         # Set configuration mode m0
         try:
             with open('/sys/class/leds/red_cntrl/brightness', 'w') as f:
                 f.write("0")
         except IOError as e:
-            print(f"Failed to set m0 (red_cntrl): {e}")
+            logging.debug(f"Failed to set m0 (red_cntrl): {e}")
         # Verify configuration mode m0
         try:
             with open('/sys/class/leds/red_cntrl/brightness', 'r') as f:
                 m0_status = f.read().strip()
                 expected_m0_status = "0" 
                 if m0_status == expected_m0_status:
-                    print(f"m0 is correctly set to 0")
+                    logging.debug(f"m0 is correctly set to 0")
                 else:
-                    print(f"m0 setup failed!")
+                    logging.debug(f"m0 setup failed!")
         except IOError as e:
-            print(f"Failed to read m0: {e}")
+            logging.debug(f"Failed to read m0: {e}")
             
         # M1
         # Set configuration mode m1
@@ -128,18 +183,18 @@ def set_mode(mode):
             with open('/sys/class/leds/green_cntrl/brightness', 'w') as f:
                 f.write("0")
         except IOError as e:
-            print(f"Failed to set m1 (green_cntrl): {e}")
+            logging.debug(f"Failed to set m1 (green_cntrl): {e}")
         # Verify configuration mode m1
         try:
             with open('/sys/class/leds/green_cntrl/brightness', 'r') as f:
                 m0_status = f.read().strip()
                 expected_m0_status = "0" 
                 if m0_status == expected_m0_status:
-                    print(f"m1 is correctly set to 0")
+                    logging.debug(f"m1 is correctly set to 0")
                 else:
-                    print(f"m1 setup failed!")
+                    logging.debug(f"m1 setup failed!")
         except IOError as e:
-            print(f"Failed to read m1: {e}")
+            logging.debug(f"Failed to read m1: {e}")
     
     time.sleep(1)
 
@@ -149,15 +204,18 @@ def get_device_id():
         data = json.load(f)
         return data['val']
 
-def read_response(ser):
+def read_response(ser, timeout=10):
     try:
-        print(f"Listening on {ser} at 9600 baud rate...")
+        logging.debug(f"Listening on {ser} at 9600 baud rate...")
         buffer = bytearray()
+        start_time = time.time()
+
         while True:
-            print("************* ",ser.in_waiting)
+            logging.debug(f"************* {ser.in_waiting}")
             if ser.in_waiting > 0:
                 data = ser.read(ser.in_waiting)
                 buffer.extend(data)
+                start_time = time.time()  # Reset the timer when data is received
                 
                 # Process complete messages
                 while True:
@@ -166,42 +224,38 @@ def read_response(ser):
                     if start_index != -1:
                         complete_message = buffer[start_index:]
                         hex_data = complete_message.hex()
-                        print(f"Received Data: {hex_data}")
-                        # Remove processed message from buffer
-                        #buffer = buffer[end_index + 1:]
+                        logging.debug(f"Received Data: {hex_data}")
                         return hex_data
                     else:
                         break
+            elif time.time() - start_time > timeout:
+                raise TimeoutError("No data received within timeout period.")
+                
     except serial.SerialException as e:
-        print(f"Error: {e}")
+        logging.debug(f"Serial error: {e}")
+        # You can handle the serial exception here, e.g., by restarting the service
+    except TimeoutError as e:
+        logging.debug(f"Timeout error: {e}")
+        # You can handle the timeout here, e.g., by restarting the service
     except KeyboardInterrupt:
-        print("Stopped listening.")
-    '''
-    response = b''
-    while len(response) < expected_response_length:
-        part = serial_port.read(expected_response_length - len(response))
-        if not part:
-            break
-        response += part
-    return response
-    '''
+        logging.debug("Stopped listening.")
 
 def send_configuration_command(serial_port, command, expected_response):
     success = False
     while not success:
-        print(f"Sending command: {command.hex()}")
+        logging.debug(f"Sending command: {command.hex()}")
         serial_port.write(command)
         time.sleep(0.1)
         response = read_response(serial_port)
-        print(f"Received response: {response}")
+        logging.debug(f"Received response: {response}")
         if response == expected_response.hex():
-            print(f"Received expected response: {response}")
+            logging.debug(f"Received expected response: {response}")
             success = True
         else:
-            print(f"Unexpected response: {response}, retrying...")
+            logging.debug(f"Unexpected response: {response}, retrying...")
 
 def configure_lora(serial_port, ADDH, ADDL, channel):
-    print(f"Configuring LoRa module with address: {(ADDH, ADDL)} and channel: {channel}")
+    logging.debug(f"Configuring LoRa module with address: {(ADDH, ADDL)} and channel: {channel}")
 
     # Set to program mode
     set_mode("configuration")
@@ -246,7 +300,7 @@ def send_data(ser, device_id):
         message = device_id + read_sensor()
         # Send the message
         #while True:
-        print(f"Sent Data: {message}")
+        logging.debug(f"Sent Data: {message}")
         json_str = json.dumps(message)
 
         # Step 3: Encode the JSON string to bytes
@@ -258,9 +312,9 @@ def send_data(ser, device_id):
         
         time.sleep(1)  # Send data every second for testing purposes
     except serial.SerialException as e:
-        print(f"Error: {e}")
+        logging.debug(f"Error: {e}")
     except KeyboardInterrupt:
-        print("Stopped sending.")
+        logging.debug("Stopped sending.")
 
 
 def read_sensor():
@@ -353,14 +407,14 @@ def log_with_size_limit(log_file_path, log_entry, max_size_kb=100):
 
     # Check if file size exceeds the limit
     current_size = os.path.getsize(log_file_path)
-    print(f"Log file size after writing: {current_size} bytes (Limit: {max_size_bytes} bytes)")
+    logging.debug(f"Log file size after writing: {current_size} bytes (Limit: {max_size_bytes} bytes)")
 
     if current_size <= max_size_bytes:
-        print("File size is within limit, no truncation needed.")
+        logging.debug("File size is within limit, no truncation needed.")
         return  # Size is within limit, no action needed
 
     # If file size exceeds the limit, reduce file size by removing oldest lines
-    print("File size exceeded limit. Starting truncation process.")
+    logging.debug("File size exceeded limit. Starting truncation process.")
     with open(log_file_path, 'r+') as log_file:
         lines = deque(log_file)
         
@@ -373,11 +427,78 @@ def log_with_size_limit(log_file_path, log_entry, max_size_kb=100):
             log_file.truncate()
             log_file.flush()
             current_size = os.path.getsize(log_file_path)
-            print(f"Log file size after truncation: {current_size} bytes")
+            logging.debug(f"Log file size after truncation: {current_size} bytes")
         
-        print(f"Truncation complete. Lines removed: {lines_removed}")
+        logging.debug(f"Truncation complete. Lines removed: {lines_removed}")
 
-if __name__ == "__main__":
+def initialize_modbus_array(device_mapping_path):
+    # Load the device mapping from JSON
+    with open(device_mapping_path, 'r') as f:
+        device_mapping = json.load(f)
+
+    # Initialize the modbus array with zeros for each device
+    modbus_array = []
+    for device_id in device_mapping.values():
+        modbus_array.extend([int(device_id)] + [0] * 9)  # 10 fields: device_id + 9 zeros
+
+    logging.debug(f"Initialized Modbus Array: {modbus_array}")
+    return modbus_array
+
+def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
+    # Load the device mapping from JSON
+    with open(device_mapping_path, 'r') as f:
+        device_mapping = json.load(f)
+
+    unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
+    if unique_id in device_mapping:
+        device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
+        try:
+            # Find the index of this device_id in the flat modbus_array
+            start_index = modbus_array.index(device_id)
+            # Update the array for this device with actual data as unsigned integers
+            modbus_array[start_index:start_index + 10] = [
+                device_id,
+                int(parsed_data['Temperature']) & 0xFFFF,
+                int(parsed_data['Humidity']) & 0xFFFF,
+                int(parsed_data['CO2']) & 0xFFFF,
+                int(parsed_data['VOC']) & 0xFFFF,
+                int(parsed_data['NOx']) & 0xFFFF,
+                int(parsed_data['PM1']) & 0xFFFF,
+                int(parsed_data['PM2_5']) & 0xFFFF,
+                int(parsed_data['PM10']) & 0xFFFF,
+                int(parsed_data['AQI']) & 0xFFFF
+            ]
+        except ValueError as e:
+            logging.error(f"Device ID {device_id} not found in Modbus Array. Error: {e}")
+    else:
+        logging.debug(f"UniqueID {unique_id} not found in device mapping.")
+
+    return modbus_array
+
+async def run_modbus_slave(modbus_array, modbus_device, context):
+    identity = ModbusDeviceIdentification()
+    identity.VendorName = 'YourVendorName'
+    identity.ProductCode = 'YourProductCode'
+    identity.VendorUrl = 'http://yourvendorurl.com'
+    identity.ProductName = 'YourProductName'
+    identity.ModelName = 'YourModelName'
+    identity.MajorMinorRevision = '1.0'
+
+    await StartAsyncSerialServer(
+        context=context,
+        identity=identity,
+        framer=ModbusRtuFramer,
+        port=modbus_device,
+        baudrate=9600,
+        parity='N',
+        stopbits=1,
+        bytesize=8,
+        timeout=1
+    )
+
+async def main_task(context):
+    global modbus_array
+
     setup_pins("OFF")
     setup_pins("ON")
     set_mode("configuration")
@@ -386,18 +507,18 @@ if __name__ == "__main__":
     try:
         with open("/usr/local/artlite-opaq-app/config/device_config.json", 'r') as f:
             unique_ids = json.load(f)
-        print("Device configuration loaded successfully.")
+        logging.debug("Device configuration loaded successfully.")
     except IOError as e:
-        print(f"Failed to read device configuration: {e}")
-        exit(1)  # Exit if the configuration can't be loaded
+        logging.debug(f"Failed to read device configuration: {e}")
+        exit(1)
     except json.JSONDecodeError as e:
-        print(f"Failed to parse JSON: {e}")
-        exit(1)  # Exit if the JSON is invalid
+        logging.debug(f"Failed to parse JSON: {e}")
+        exit(1)
 
     device_id = get_device_id()
 
     if device_id in unique_ids:
-        print(f"Device ID {device_id} found in configuration.")
+        logging.debug(f"Device ID {device_id} found in configuration.")
 
         if unique_ids[device_id]["devType"] == "sender":
             while True:
@@ -405,24 +526,20 @@ if __name__ == "__main__":
                     uniqueAddr_str = unique_ids[device_id]["customAddr"]
                     channel_str = unique_ids[device_id]["channel"]
 
-                    # Convert the strings to hexadecimal integers
                     channel = int(channel_str, 16)
                     unique_addr_hex = int(uniqueAddr_str, 16)
 
-                    # Parse uniqueAddr hex into low and high bytes
-                    ADDL = unique_addr_hex & 0xFF  # Extract the low byte
-                    ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
+                    ADDL = unique_addr_hex & 0xFF
+                    ADDH = (unique_addr_hex >> 8) & 0xFF
 
-                    # Log the results
-                    print(f"Channel Hex: {channel:#x}")
-                    print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
-                    print(f"UniqueAddr Low Byte: {ADDL:#x}")
-                    print(f"UniqueAddr High Byte: {ADDH:#x}")
+                    logging.debug(f"Channel Hex: {channel:#x}")
+                    logging.debug(f"UniqueAddr Hex: {unique_addr_hex:#x}")
+                    logging.debug(f"UniqueAddr Low Byte: {ADDL:#x}")
+                    logging.debug(f"UniqueAddr High Byte: {ADDH:#x}")
 
-                    with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+                    with serial.Serial(lora_device, 9600, timeout=1) as ser:
                         configure_lora(ser, ADDH, ADDL, channel)
 
-                        # Flush any stale data in the buffers
                         ser.flushInput()
                         ser.flushOutput()
 
@@ -433,64 +550,115 @@ if __name__ == "__main__":
                         time.sleep(5)
 
                 except KeyError as e:
-                    print(f"Configuration for device ID {device_id} is incomplete: {e}")
-                    break  # Exit loop if configuration is missing key data
+                    logging.debug(f"Configuration for device ID {device_id} is incomplete: {e}")
+                    break
                 except serial.SerialException as e:
-                    print(f"Serial communication error: {e}")
-                    time.sleep(10)  # Wait and retry if there's a serial error
+                    logging.debug(f"Serial communication error: {e}")
+                    time.sleep(10)
                 except Exception as e:
-                    print(f"Unexpected error: {e}")
-                    time.sleep(10)  # Wait and retry in case of unexpected errors
+                    logging.debug(f"Unexpected error: {e}")
+                    time.sleep(10)
         else:
             uniqueAddr_str = unique_ids[device_id]["customAddr"]
             channel_str = unique_ids[device_id]["channel"]
 
-            # Convert the strings to hexadecimal integers
             channel = int(channel_str, 16)
             unique_addr_hex = int(uniqueAddr_str, 16)
 
-            # Parse uniqueAddr hex into low and high bytes
-            ADDL = unique_addr_hex & 0xFF  # Extract the low byte
-            ADDH = (unique_addr_hex >> 8) & 0xFF  # Extract the high byte
-            print(f"Channel Hex: {channel:#x}")
-            print(f"UniqueAddr Hex: {unique_addr_hex:#x}")
-            print(f"UniqueAddr Low Byte: {ADDL:#x}")
-            print(f"UniqueAddr High Byte: {ADDH:#x}")
-            with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
+            ADDL = unique_addr_hex & 0xFF
+            ADDH = (unique_addr_hex >> 8) & 0xFF
+            logging.debug(f"Channel Hex: {channel:#x}")
+            logging.debug(f"UniqueAddr Hex: {unique_addr_hex:#x}")
+            logging.debug(f"UniqueAddr Low Byte: {ADDL:#x}")
+            logging.debug(f"UniqueAddr High Byte: {ADDH:#x}")
+            with serial.Serial(lora_device, 9600, timeout=1) as ser:
                 configure_lora(ser, ADDH, ADDL, channel)
 
             try:
-                with serial.Serial('/dev/ttyUSB0', 9600, timeout=1) as ser:
-                    
-                    buffer = bytearray()
-                    while True:
-                        if ser.in_waiting > 0:
-                            data = ser.read(ser.in_waiting)
-                            buffer.extend(data)
+                reader, writer = await serial_asyncio.open_serial_connection(url=lora_device, baudrate=9600)
+                
+                buffer = bytearray()
+                while True:
+                    try:
+                        data = await reader.read(1024)
+                        buffer.extend(data)
+                        
+                        while True:
+                            start_index = buffer.find(b'\xcb\xda')
+                            end_index = buffer.find(b'\xbc\x0a')
                             
-                            # Process complete messages
-                            while True:
-                                start_index = buffer.find(b'\xcb\xda')  # Example start delimiter
-                                end_index = buffer.find(b'\xbc\x0a')       # Example end delimiter
+                            if start_index != -1 and end_index != -1 and end_index > start_index:
+                                complete_message = buffer[start_index:end_index + 1]
+                                hex_data = complete_message.hex()
+                                logging.debug(f"Received Data: {hex_data}")
+                                parsed_data = parse_lora_data(hex_data)
+                                logging.debug(f"Parsed Data: {parsed_data}")
+                                log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}", 1000)
+                                modbus_array = update_modbus_array(modbus_array, parsed_data, device_mapping_path)
+                                logging.debug(f"Updated Modbus Array with size {len(modbus_array)}: {modbus_array}")
                                 
-                                if start_index != -1 and end_index != -1 and end_index > start_index:
-                                    complete_message = buffer[start_index:end_index + 1]
-                                    hex_data = complete_message.hex()
-                                    print(f"Received Data: {hex_data}")
-                                    parsed_data = parse_lora_data(hex_data)
-                                    print(f"Parsed Data: {parsed_data}")
-                                    log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}", 1000)
-                                    # Remove processed message from buffer
-                                    buffer = buffer[end_index + 1:]
-                                else:
-                                    break
-                            time.sleep(1)
+                                # Update the Modbus holding registers with the new array
+                                store = context[2]  # Access the slave with address 2
+                                store.setValues(3, 1, modbus_array)  # Update function code 3 (holding registers)
+                                
+                                buffer = buffer[end_index + 1:]
+                            else:
+                                break
+                                
+                        await asyncio.sleep(1)
+
+                    except asyncio.CancelledError:
+                        logging.debug("Task cancelled.")
+                        break
+
             except serial.SerialException as e:
-                print(f"Error: {e}")
+                logging.debug(f"Serial communication error: {e}")
             except KeyboardInterrupt:
-                print("Stopped listening.")
+                logging.debug("Stopped listening.")
 
     else:
-        print(f"Device ID {device_id} not found in configuration.")
+        logging.debug(f"Device ID {device_id} not found in configuration.")
 
 
+async def run_all():
+    global modbus_array
+    global modbus_device
+    global lora_device
+
+    lora_device = get_ttyUSB_device('FTDI Module Connected to Lora Module')
+    modbus_device = get_ttyUSB_device('FTDI Module Connected to MODBUS Module')
+
+    logging.debug(f"Lora Module Device: {lora_device}")
+    logging.debug(f"MODBUS Module Device: {modbus_device}")
+
+    modbus_array = initialize_modbus_array(device_mapping_path)
+    logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
+
+    # Create a Modbus datastore with initial values
+    hr_block = ModbusSequentialDataBlock(1, modbus_array)  # Create a holding register block
+    store = ModbusSlaveContext(
+        di=ModbusSequentialDataBlock(0, [0]*100),  # Discrete Inputs
+        co=ModbusSequentialDataBlock(0, [0]*100),  # Coils
+        hr=hr_block,  # Holding Registers
+        ir=ModbusSequentialDataBlock(0, [0]*100)   # Input Registers
+    )
+    context = ModbusServerContext(slaves={2: store}, single=False)  # Set Slave Address to 2
+
+    try:
+        # Create two tasks to run concurrently
+        task1 = asyncio.create_task(run_modbus_slave(modbus_array, modbus_device, context))
+        task2 = asyncio.create_task(main_task(context))
+
+        # Wait for both tasks to complete
+        await asyncio.gather(task1, task2)
+    except asyncio.CancelledError:
+        logging.debug("Tasks cancelled.")
+    finally:
+        logging.debug("Exiting run_all function.")
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_all())
+    except KeyboardInterrupt:
+        logging.debug("Received KeyboardInterrupt. Exiting.")

@@ -11,18 +11,23 @@ def count_packets(file_path):
     
     with open(file_path, 'r') as file:
         for line in file:
-            timestamp_match = re.search(r'\[(.*?)\]', line)
-            match = re.search(r"'UniqueID':\s*'\"([a-fA-F0-9]+)", line)
-            if timestamp_match and match:
-                identifier = match.group(1)
-                timestamp = datetime.strptime(timestamp_match.group(1), '%Y-%m-%d %H:%M:%S')
-                
-                packet_counts[identifier] += 1
-                timestamps.append(timestamp)
-                
-                if first_timestamp is None:
-                    first_timestamp = timestamp
-                last_timestamp = timestamp
+            try:
+                timestamp_match = re.search(r'\[(.*?)\]', line)
+                match = re.search(r"'UniqueID':\s*'\"([a-fA-F0-9]+)", line)
+                if timestamp_match and match:
+                    identifier = match.group(1)
+                    timestamp = datetime.strptime(timestamp_match.group(1), '%Y-%m-%d %H:%M:%S')
+                    
+                    packet_counts[identifier] += 1
+                    timestamps.append(timestamp)
+                    
+                    if first_timestamp is None:
+                        first_timestamp = timestamp
+                    last_timestamp = timestamp
+            except Exception as e:
+                # Ignore the line if any error occurs
+                print(f"Ignored line due to error: {e}")
+                continue
     
     elapsed_time = (last_timestamp - first_timestamp).total_seconds() if first_timestamp and last_timestamp else 0
     
@@ -47,7 +52,7 @@ def generate_ascii_graph(packet_counts, elapsed_time, first_timestamp, last_time
     max_gap = max(time_gaps) if time_gaps else 0
     avg_gap = np.mean(time_gaps) if time_gaps else 0
     
-    print(f"\nASCII Graph of Packet Counts (Elapsed Time: {elapsed_time:.2f} seconds):")
+    print(f"\nPacket Counts and other Info (Elapsed Time: {elapsed_time:.2f} seconds):")
     print(f"Time Range: {first_timestamp} to {last_timestamp}")
     print(f"Number of Devices: {num_devices}")
     print(f"Average Packet Count per Device: {avg_count:.2f}")
@@ -67,9 +72,9 @@ def main():
     file_path = '/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt'  # Update with your file path
     packet_counts, elapsed_time, first_timestamp, last_timestamp, timestamps = count_packets(file_path)
     
-    print("Packet counts per unique identifier:")
-    for identifier, count in packet_counts.items():
-        print(f"{identifier}: {count}")
+    #print("Packet counts per unique identifier:")
+    #for identifier, count in packet_counts.items():
+    #    print(f"{identifier}: {count}")
     
     generate_ascii_graph(packet_counts, elapsed_time, first_timestamp, last_timestamp, timestamps)
 
