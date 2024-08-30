@@ -1,12 +1,16 @@
-import random
-import serial
+# Standard Library Imports
+import os
+import sys
 import time
 import json
-import os
+import random
+import logging
+import threading
 from datetime import datetime
 from collections import deque
-from sensorUtils import SensorHandler
-from functionAQI import getQuality
+
+# Third-Party Imports
+import serial
 import pyudev
 import asyncio
 import serial_asyncio  # Requires pyserial-asyncio package
@@ -14,7 +18,12 @@ from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext, ModbusSe
 from pymodbus.server.async_io import StartAsyncSerialServer
 from pymodbus.transaction import ModbusRtuFramer
 from pymodbus.device import ModbusDeviceIdentification
-import logging
+
+# Local/Application-Specific Imports
+sys.path.append(os.path.abspath('/usr/local/artlite-opaq-app'))
+from sensorUtils import SensorHandler
+from functionAQI import getQuality
+from src.arduino_iot_cloud import ArduinoCloudClient, Task
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG,  # Set the logging level
@@ -29,6 +38,22 @@ device_mapping_path = "/usr/local/artlite-opaq-app/config/device_mapping.json"
 modbus_array = None
 modbus_device = None
 lora_device = None
+
+def cloud_tasks():
+    logging.info("Starting Arduino Cloud Functionality")
+
+    with open('/usr/local/artlite-opaq-app/config/secrets.json', 'r') as file:
+        secrets = json.load(file)
+        DEVICE_ID = secrets['DEVICE_ID']
+        SECRET_KEY = secrets['SECRET_KEY']
+    
+    client = ArduinoCloudClient(device_id=DEVICE_ID, username=DEVICE_ID, password=SECRET_KEY)
+    
+    #client.register(Task("update_rssi_value", on_run=update_rssi_value, interval=10.0))
+    
+    #client.register("rssi_value", value=0, on_read=read_rssi_value, interval=10.0)
+    
+    client.start()
 
 def get_ttyUSB_device(module_name):
     # Define a mapping for USB paths to module names
@@ -113,8 +138,6 @@ def setup_pins(status):
     except IOError as e:
         logging.debug(f"Failed to read LoRa VCC: {e}")
 
-
-
 def set_mode(mode):
     if mode == "configuration":
         logging.debug("Entering into configuration mode..")
@@ -197,7 +220,6 @@ def set_mode(mode):
             logging.debug(f"Failed to read m1: {e}")
     
     time.sleep(1)
-
 
 def get_device_id():
     with open('/tmp/meta_files/UNIQUE_ID/id-displayboard.json') as f:
@@ -283,8 +305,6 @@ def configure_lora(serial_port, ADDH, ADDL, channel):
     time.sleep(2)
     set_mode("normal")
 
-
-
 def send_data(ser, device_id):
     try:
         # Define the start and end delimiters
@@ -315,7 +335,6 @@ def send_data(ser, device_id):
         logging.debug(f"Error: {e}")
     except KeyboardInterrupt:
         logging.debug("Stopped sending.")
-
 
 def read_sensor():
     __sensor = SensorHandler()
@@ -489,8 +508,6 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
 
     return modbus_array
 
-
-
 async def run_modbus_slave(modbus_array, modbus_device, context):
     identity = ModbusDeviceIdentification()
     identity.VendorName = 'Beko AeroSense'
@@ -635,11 +652,12 @@ async def main_task(context):
     else:
         logging.debug(f"Device ID {device_id} not found in configuration.")
 
-
 async def run_all():
     global modbus_array
     global modbus_device
     global lora_device
+
+    
 
     lora_device = get_ttyUSB_device('FTDI Module Connected to Lora Module')
     modbus_device = get_ttyUSB_device('FTDI Module Connected to MODBUS Module')
@@ -648,6 +666,12 @@ async def run_all():
     logging.debug(f"MODBUS Module Device: {modbus_device}")
 
     if modbus_device is not None:
+
+        # Start cloud setup in a separate thread
+        cloud_thread = threading.Thread(target=cloud_tasks)
+        cloud_thread.daemon = True
+        cloud_thread.start()
+
         modbus_array = initialize_modbus_array(device_mapping_path)
         logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
 
@@ -677,7 +701,6 @@ async def run_all():
         logging.debug("Tasks cancelled.")
     finally:
         logging.debug("Exiting run_all function.")
-
 
 if __name__ == "__main__":
     try:

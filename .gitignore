@@ -8,3 +8,4 @@ device_config.json
 scripts/lora_output.txt
 receiver_log_buffer.txt
 data/receiver_log_buffer.txt
+.vscode/extensions.json
