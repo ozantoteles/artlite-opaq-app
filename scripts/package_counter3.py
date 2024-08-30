@@ -12,7 +12,7 @@ def count_packets(file_path, device_mapping):
     packet_counts = defaultdict(int)
     first_timestamp = None
     last_timestamp = None
-    timestamps = []
+    timestamps = defaultdict(list)
     
     with open(file_path, 'r') as file:
         for line in file:
@@ -24,7 +24,7 @@ def count_packets(file_path, device_mapping):
                     timestamp = datetime.strptime(timestamp_match.group(1), '%Y-%m-%d %H:%M:%S')
                     
                     packet_counts[identifier] += 1
-                    timestamps.append(timestamp)
+                    timestamps[identifier].append(timestamp)
                     
                     if first_timestamp is None:
                         first_timestamp = timestamp
@@ -52,11 +52,6 @@ def generate_ascii_graph(packet_counts, elapsed_time, first_timestamp, last_time
     pps = sum(packet_counts.values()) / elapsed_time if elapsed_time > 0 else 0
     pps_per_device = avg_count / elapsed_time if elapsed_time > 0 else 0
     
-    # Calculate gaps in data
-    time_gaps = [(timestamps[i+1] - timestamps[i]).total_seconds() for i in range(len(timestamps) - 1)]
-    max_gap = max(time_gaps) if time_gaps else 0
-    avg_gap = np.mean(time_gaps) if time_gaps else 0
-    
     print(f"\nPacket Counts and other Info (Elapsed Time: {elapsed_time:.2f} seconds):")
     print(f"Time Range: {first_timestamp} to {last_timestamp}")
     print(f"Number of Devices: {num_devices}")
@@ -65,14 +60,20 @@ def generate_ascii_graph(packet_counts, elapsed_time, first_timestamp, last_time
     print(f"Minimum Packet Count: {min_count}")
     print(f"Maximum Packet Count: {max_count}")
     print(f"Packet Arrival Rate (PPS): {pps:.2f} packets/second")
-    print(f"Packet Arrival Rate Per Device: {pps_per_device:.2f} packets/device/second")
-    print(f"Longest Time Gap Between Packets: {max_gap:.2f} seconds")
-    print(f"Average Time Gap Between Packets: {avg_gap:.2f} seconds\n")
+    print(f"Packet Arrival Rate Per Device: {pps_per_device:.2f} packets/device/second\n")
+    
+    print(f"{'Identifier':<15} {'Device ID':<12} {'Packet Count':<15} {'Max Gap (s)':<15} {'Avg Gap (s)':<15} {'Min Gap (s)':<15}")
+    print("="*90)
     
     for identifier, count in packet_counts.items():
         device_id = device_mapping.get(identifier, "Unknown Device ID")
+        time_gaps = [(timestamps[identifier][i+1] - timestamps[identifier][i]).total_seconds() for i in range(len(timestamps[identifier]) - 1)]
+        max_gap = max(time_gaps) if time_gaps else 0
+        avg_gap = np.mean(time_gaps) if time_gaps else 0
+        min_gap = min(time_gaps) if time_gaps else 0
+        
         bar_length = int(count * scale_factor)
-        print(f"{identifier} (Device ID: {device_id}): {'#' * bar_length} ({count})")
+        print(f"{identifier:<15} {device_id:<12} {count:<15} {max_gap:<15.2f} {avg_gap:<15.2f} {min_gap:<15.2f} {'#' * bar_length}")
 
 def main():
     file_path = '/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt'  # Update with your file path

@@ -26,11 +26,12 @@ fi
 # Function to handle the operations for a single target
 process_target() {
   local target=$1
-  echo "Copying to $target..."
-  eval $(printf "$COPY_CMD" "$target")
-  echo "Extracting on $target..."
-  ssh -o ForwardX11=no root@$target "tar -xzf /usr/local/$TARBALL_NAME -C /usr/local/ && rm /usr/local/$TARBALL_NAME"
-  echo "Done with $target."
+  #echo "Copying to $target..."
+  #eval $(printf "$COPY_CMD" "$target")
+  #echo "Extracting on $target..."
+  #ssh -o ForwardX11=no root@$target "tar -xzf /usr/local/$TARBALL_NAME -C /usr/local/ && rm /usr/local/$TARBALL_NAME"
+  #echo "Done with $target."
+  echo "Systemd service restarting on $target."
   ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
   echo "Systemd service restarted on $target."
 }

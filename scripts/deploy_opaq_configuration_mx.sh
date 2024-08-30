@@ -20,7 +20,8 @@ function ssh_execute {
 }
 
 # Loop through each target
-for target in 192.168.1.136; do
+#for target in 192.168.1.136; do
+for target in 192.168.1.100 192.168.1.104 192.168.1.108 192.168.1.109 192.168.1.110 192.168.1.114 192.168.1.115 192.168.1.116 192.168.1.118 192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.123 192.168.1.125 192.168.1.126 192.168.1.127 192.168.1.128 192.168.1.129 192.168.1.130 192.168.1.131 192.168.1.132 192.168.1.186; do
   echo "Copying tarball to $target..."
   # Copy the tarball to the remote target
   scp $TEMP_DIR/$TARBALL_NAME root@$target:/usr/local/

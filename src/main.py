@@ -647,26 +647,32 @@ async def run_all():
     logging.debug(f"Lora Module Device: {lora_device}")
     logging.debug(f"MODBUS Module Device: {modbus_device}")
 
-    modbus_array = initialize_modbus_array(device_mapping_path)
-    logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
+    if modbus_device is not None:
+        modbus_array = initialize_modbus_array(device_mapping_path)
+        logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
 
-    # Create a Modbus datastore with initial values
-    hr_block = ModbusSequentialDataBlock(0, modbus_array)  # Create a holding register block
-    store = ModbusSlaveContext(
-        di=ModbusSequentialDataBlock(0, [0]*100),  # Discrete Inputs
-        co=ModbusSequentialDataBlock(0, [0]*100),  # Coils
-        hr=hr_block,  # Holding Registers
-        ir=ModbusSequentialDataBlock(0, [0]*100)   # Input Registers
-    )
-    context = ModbusServerContext(slaves={2: store}, single=False)  # Set Slave Address to 2
+        # Create a Modbus datastore with initial values
+        hr_block = ModbusSequentialDataBlock(0, modbus_array)  # Create a holding register block
+        store = ModbusSlaveContext(
+            di=ModbusSequentialDataBlock(0, [0]*100),  # Discrete Inputs
+            co=ModbusSequentialDataBlock(0, [0]*100),  # Coils
+            hr=hr_block,  # Holding Registers
+            ir=ModbusSequentialDataBlock(0, [0]*100)   # Input Registers
+        )
+        context = ModbusServerContext(slaves={2: store}, single=False)  # Set Slave Address to 2
+
+        task1 = asyncio.create_task(run_modbus_slave(modbus_array, modbus_device, context))
+    else:
+        logging.debug("Modbus operations are skipped due to no connected MODBUS module.")
+        task1 = None
 
     try:
-        # Create two tasks to run concurrently
-        task1 = asyncio.create_task(run_modbus_slave(modbus_array, modbus_device, context))
-        task2 = asyncio.create_task(main_task(context))
+        task2 = asyncio.create_task(main_task(context if modbus_device else None))
 
-        # Wait for both tasks to complete
-        await asyncio.gather(task1, task2)
+        if task1 is not None:
+            await asyncio.gather(task1, task2)
+        else:
+            await task2  # Only run the main task if Modbus operations are skipped
     except asyncio.CancelledError:
         logging.debug("Tasks cancelled.")
     finally:
