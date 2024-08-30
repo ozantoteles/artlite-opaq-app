@@ -82,7 +82,7 @@ async def run_modbus_slave():
         port=modbus_device,  # Use the correct COM port for the FTDI adapter
         baudrate=9600,
         parity='N',
-        stopbits=1,
+        stopbits=2,
         bytesize=8,
         timeout=1
     )

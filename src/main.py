@@ -454,7 +454,18 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
         device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
         try:
             # Find the index of this device_id in the flat modbus_array
-            start_index = modbus_array.index(device_id)
+            start_index = -1
+            for i in range(0, len(modbus_array), 10):
+                if modbus_array[i] == device_id:
+                    start_index = i
+                    break
+            
+            if start_index == -1:
+                raise ValueError(f"Device ID {device_id} not found in Modbus Array.")
+            
+            logging.debug(f"Updating Modbus Array at index {start_index} for Device ID {device_id}")
+            logging.debug(f"Modbus Array before update: {modbus_array[start_index:start_index + 10]}")
+
             # Update the array for this device with actual data as unsigned integers
             modbus_array[start_index:start_index + 10] = [
                 device_id,
@@ -468,6 +479,9 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
                 int(parsed_data['PM10']) & 0xFFFF,
                 int(parsed_data['AQI']) & 0xFFFF
             ]
+            
+            logging.debug(f"Modbus Array after update: {modbus_array[start_index:start_index + 10]}")
+
         except ValueError as e:
             logging.error(f"Device ID {device_id} not found in Modbus Array. Error: {e}")
     else:
@@ -475,14 +489,16 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
 
     return modbus_array
 
+
+
 async def run_modbus_slave(modbus_array, modbus_device, context):
     identity = ModbusDeviceIdentification()
-    identity.VendorName = 'YourVendorName'
-    identity.ProductCode = 'YourProductCode'
-    identity.VendorUrl = 'http://yourvendorurl.com'
-    identity.ProductName = 'YourProductName'
-    identity.ModelName = 'YourModelName'
-    identity.MajorMinorRevision = '1.0'
+    identity.VendorName = 'Beko AeroSense'
+    identity.ProductCode = 'OPAQ AQSN'
+    identity.VendorUrl = 'http://https://www.bekocorporate.com/'
+    identity.ProductName = 'OPAQ AQSN DWP'
+    identity.ModelName = 'OPAQ AQSN Artlite LoRa Gateway'
+    identity.MajorMinorRevision = '2.0'
 
     await StartAsyncSerialServer(
         context=context,
@@ -491,7 +507,7 @@ async def run_modbus_slave(modbus_array, modbus_device, context):
         port=modbus_device,
         baudrate=9600,
         parity='N',
-        stopbits=1,
+        stopbits=2,
         bytesize=8,
         timeout=1
     )
@@ -599,7 +615,7 @@ async def main_task(context):
                                 
                                 # Update the Modbus holding registers with the new array
                                 store = context[2]  # Access the slave with address 2
-                                store.setValues(3, 1, modbus_array)  # Update function code 3 (holding registers)
+                                store.setValues(3, 0, modbus_array)  # Update function code 3 (holding registers)
                                 
                                 buffer = buffer[end_index + 1:]
                             else:
@@ -635,7 +651,7 @@ async def run_all():
     logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
 
     # Create a Modbus datastore with initial values
-    hr_block = ModbusSequentialDataBlock(1, modbus_array)  # Create a holding register block
+    hr_block = ModbusSequentialDataBlock(0, modbus_array)  # Create a holding register block
     store = ModbusSlaveContext(
         di=ModbusSequentialDataBlock(0, [0]*100),  # Discrete Inputs
         co=ModbusSequentialDataBlock(0, [0]*100),  # Coils

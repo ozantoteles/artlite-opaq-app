@@ -11,10 +11,10 @@ async def run_modbus_master():
     try:
         # Create an asynchronous Modbus client for serial communication
         client = AsyncModbusSerialClient(
-            port='COM18',   # Adjust this to the correct COM port for the USB to RS485 adapter
+            port='COM61',   # Adjust this to the correct COM port for the USB to RS485 adapter
             baudrate=9600,
             parity='N',
-            stopbits=1,
+            stopbits=2,
             bytesize=8,
             timeout=3
         )
@@ -31,8 +31,8 @@ async def run_modbus_master():
             try:
                 # Send Modbus request to read holding registers
                 response = await client.read_holding_registers(
-                    address=0,  # Start address
-                    count=10,   # Number of registers to read
+                    address=1,  # Start address
+                    count=120,   # Number of registers to read
                     slave=2     # Slave address
                 )
 
