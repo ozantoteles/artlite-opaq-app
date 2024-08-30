@@ -36,11 +36,24 @@ logging.basicConfig(level=logging.DEBUG,  # Set the logging level
 
 device_mapping_path = "/usr/local/artlite-opaq-app/config/device_mapping.json"
 modbus_array = None
+cloud_array = []  # First initialization
+cloud_array_lock = threading.Lock()
+client = None
 modbus_device = None
 lora_device = None
 
+def get_value_callback(index):
+    def callback(client, value_name=None):
+        with cloud_array_lock:
+            if index < len(cloud_array):
+                return cloud_array[index]
+            else:
+                return None  # Return a default value or None if the index is out of range
+    return callback
+
 def cloud_tasks():
     logging.info("Starting Arduino Cloud Functionality")
+    global client
 
     with open('/usr/local/artlite-opaq-app/config/secrets.json', 'r') as file:
         secrets = json.load(file)
@@ -49,10 +62,25 @@ def cloud_tasks():
     
     client = ArduinoCloudClient(device_id=DEVICE_ID, username=DEVICE_ID, password=SECRET_KEY)
     
-    #client.register(Task("update_rssi_value", on_run=update_rssi_value, interval=10.0))
-    
-    #client.register("rssi_value", value=0, on_read=read_rssi_value, interval=10.0)
-    
+    # Determine the number of devices based on cloud_array size
+    num_devices = len(cloud_array) // 10
+    logging.info(f"Configuring cloud tasks for {num_devices} devices.")
+
+    # Register each value with an on_read callback and set an interval
+    interval = 20.0  # Set the interval to 10 seconds, adjust as needed
+    for i in range(1, num_devices + 1):
+        start_index = (i - 1) * 10
+        client.register(f'dev_id_{i}', value=0, on_read=get_value_callback(start_index), interval=interval)
+        client.register(f'temperature_{i}', value=0, on_read=get_value_callback(start_index + 1), interval=interval)
+        client.register(f'humidity_{i}', value=0, on_read=get_value_callback(start_index + 2), interval=interval)
+        client.register(f'pm1_0_{i}', value=0, on_read=get_value_callback(start_index + 3), interval=interval)
+        client.register(f'pm2_5_{i}', value=0, on_read=get_value_callback(start_index + 4), interval=interval)
+        client.register(f'pm10_{i}', value=0, on_read=get_value_callback(start_index + 5), interval=interval)
+        client.register(f'co2_{i}', value=0, on_read=get_value_callback(start_index + 6), interval=interval)
+        client.register(f'voc_index_{i}', value=0, on_read=get_value_callback(start_index + 7), interval=interval)
+        client.register(f'nox_index_{i}', value=0, on_read=get_value_callback(start_index + 8), interval=interval)
+        client.register(f'air_quality_index_{i}', value=0, on_read=get_value_callback(start_index + 9), interval=interval)
+
     client.start()
 
 def get_ttyUSB_device(module_name):
@@ -508,6 +536,64 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
 
     return modbus_array
 
+def initialize_cloud_array(device_mapping_path):
+    # Load the device mapping from JSON
+    with open(device_mapping_path, 'r') as f:
+        device_mapping = json.load(f)
+
+    # Initialize the cloud array with zeros for each device
+    cloud_array = []
+    for device_id in device_mapping.values():
+        cloud_array.extend([int(device_id)] + [0] * 9)  # 10 fields: device_id + 9 zeros
+
+    logging.debug(f"Initialized Cloud Array: {cloud_array}")
+    return cloud_array
+
+def update_cloud_array(cloud_array, parsed_data, device_mapping_path):
+    # Load the device mapping from JSON
+    with open(device_mapping_path, 'r') as f:
+        device_mapping = json.load(f)
+
+    unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
+    if unique_id in device_mapping:
+        device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
+        try:
+            # Find the index of this device_id in the flat cloud_array
+            start_index = -1
+            for i in range(0, len(cloud_array), 10):
+                if cloud_array[i] == device_id:
+                    start_index = i
+                    break
+            
+            if start_index == -1:
+                raise ValueError(f"Device ID {device_id} not found in Cloud Array.")
+            
+            logging.debug(f"Updating Cloud Array at index {start_index} for Device ID {device_id}")
+            logging.debug(f"Cloud Array before update: {cloud_array[start_index:start_index + 10]}")
+
+            # Update the array for this device with actual data as unsigned integers
+            cloud_array[start_index:start_index + 10] = [
+                device_id,
+                int(parsed_data['Temperature']),
+                int(parsed_data['Humidity']),
+                int(parsed_data['PM1']),
+                int(parsed_data['PM2_5']),
+                int(parsed_data['PM10']),
+                int(parsed_data['CO2']),
+                int(parsed_data['VOC']),
+                int(parsed_data['NOx']),
+                int(parsed_data['AQI'])
+            ]
+            
+            logging.debug(f"Cloud Array after update: {cloud_array[start_index:start_index + 10]}")
+
+        except ValueError as e:
+            logging.error(f"Device ID {device_id} not found in Cloud Array. Error: {e}")
+    else:
+        logging.debug(f"UniqueID {unique_id} not found in device mapping.")
+
+    return cloud_array
+
 async def run_modbus_slave(modbus_array, modbus_device, context):
     identity = ModbusDeviceIdentification()
     identity.VendorName = 'Beko AeroSense'
@@ -531,6 +617,7 @@ async def run_modbus_slave(modbus_array, modbus_device, context):
 
 async def main_task(context):
     global modbus_array
+    global cloud_array
 
     setup_pins("OFF")
     setup_pins("ON")
@@ -634,6 +721,9 @@ async def main_task(context):
                                 store = context[2]  # Access the slave with address 2
                                 store.setValues(3, 0, modbus_array)  # Update function code 3 (holding registers)
                                 
+                                cloud_array = update_cloud_array(cloud_array, parsed_data, device_mapping_path)
+                                logging.debug(f"Updated Cloud Array with size {len(cloud_array)}: {cloud_array}")
+
                                 buffer = buffer[end_index + 1:]
                             else:
                                 break
@@ -654,10 +744,9 @@ async def main_task(context):
 
 async def run_all():
     global modbus_array
+    global cloud_array
     global modbus_device
     global lora_device
-
-    
 
     lora_device = get_ttyUSB_device('FTDI Module Connected to Lora Module')
     modbus_device = get_ttyUSB_device('FTDI Module Connected to MODBUS Module')
@@ -667,13 +756,16 @@ async def run_all():
 
     if modbus_device is not None:
 
+        modbus_array = initialize_modbus_array(device_mapping_path)
+        logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
+
+        cloud_array = initialize_cloud_array(device_mapping_path)
+        logging.debug(f"Initialized Cloud Array with size {len(cloud_array)}: {cloud_array}")
+
         # Start cloud setup in a separate thread
         cloud_thread = threading.Thread(target=cloud_tasks)
         cloud_thread.daemon = True
         cloud_thread.start()
-
-        modbus_array = initialize_modbus_array(device_mapping_path)
-        logging.debug(f"Initialized Modbus Array with size {len(modbus_array)}: {modbus_array}")
 
         # Create a Modbus datastore with initial values
         hr_block = ModbusSequentialDataBlock(0, modbus_array)  # Create a holding register block
