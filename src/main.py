@@ -5,6 +5,7 @@ import time
 import json
 import random
 import logging
+from logging.handlers import RotatingFileHandler
 import threading
 from datetime import datetime
 from collections import deque
@@ -27,11 +28,11 @@ from src.arduino_iot_cloud import ArduinoCloudClient, Task
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG,  # Set the logging level
-                    format='%(asctime)s - %(levelname)s - %(message)s',  # Define the log message format
+                    format='%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(message)s',  # Include file name and function name
                     datefmt='%Y-%m-%d %H:%M:%S',  # Date format
                     handlers=[
                         logging.StreamHandler(),  # Log to console
-                        logging.FileHandler("app.log")  # Also log to a file named "app.log"
+                        RotatingFileHandler("app.log", maxBytes=1024*1024, backupCount=3)  # Log to a file with rotation
                     ])
 
 device_mapping_path = "/usr/local/artlite-opaq-app/config/device_mapping.json"
@@ -166,57 +167,101 @@ def setup_pins(status):
     except IOError as e:
         logging.debug(f"Failed to read LoRa VCC: {e}")
 
-def set_mode(mode):
+def set_mode(ebyte_type, mode):
     if mode == "configuration":
-        logging.debug("Entering into configuration mode..")
-        # M0
-        # Set configuration mode m0
-        try:
-            with open('/sys/class/leds/red_cntrl/brightness', 'w') as f:
-                f.write("255")
-        except IOError as e:
-            logging.debug(f"Failed to set m0 (red_cntrl): {e}")
-        # Verify configuration mode m0
-        try:
-            with open('/sys/class/leds/red_cntrl/brightness', 'r') as f:
-                m0_status = f.read().strip()
-                expected_m0_status = "255" 
-                if m0_status == expected_m0_status:
-                    logging.debug(f"m0 is correctly set to 255")
-                else:
-                    logging.debug(f"m0 setup failed!")
-        except IOError as e:
-            logging.debug(f"Failed to read m0: {e}")
-            
-        # M1
-        # Set configuration mode m1
-        try:
-            with open('/sys/class/leds/green_cntrl/brightness', 'w') as f:
-                f.write("255")
-        except IOError as e:
-            logging.debug(f"Failed to set m1 (green_cntrl): {e}")
-        # Verify configuration mode m1
-        try:
-            with open('/sys/class/leds/green_cntrl/brightness', 'r') as f:
-                m0_status = f.read().strip()
-                expected_m0_status = "255" 
-                if m0_status == expected_m0_status:
-                    logging.debug(f"m1 is correctly set to 255")
-                else:
-                    logging.debug(f"m1 setup failed!")
-        except IOError as e:
-            logging.debug(f"Failed to read m1: {e}")
+            if ebyte_type == "e220":
+                logging.debug("Entering into configuration mode..")
+                # M0
+                # Set configuration mode m0
+
+                try:
+                    with open('/sys/class/leds/red_cntrl/brightness', 'w') as f:
+                        f.write("255")
+                except IOError as e:
+                    logging.debug(f"Failed to set m0 (red_cntrl): {e}")
+                # Verify configuration mode m0
+                try:
+                    with open('/sys/class/leds/red_cntrl/brightness', 'r') as f:
+                        m0_status = f.read().strip()
+                        expected_m0_status = "255" 
+                        if m0_status == expected_m0_status:
+                            logging.debug(f"m0 is correctly set to 255")
+                        else:
+                            logging.debug(f"m0 setup failed!")
+                except IOError as e:
+                    logging.debug(f"Failed to read m0: {e}")
+                    
+                # M1
+                # Set configuration mode m1
+                try:
+                    with open('/sys/class/leds/green_cntrl/brightness', 'w') as f:
+                        f.write("255")
+                except IOError as e:
+                    logging.debug(f"Failed to set m1 (green_cntrl): {e}")
+                # Verify configuration mode m1
+                try:
+                    with open('/sys/class/leds/green_cntrl/brightness', 'r') as f:
+                        m0_status = f.read().strip()
+                        expected_m0_status = "255" 
+                        if m0_status == expected_m0_status:
+                            logging.debug(f"m1 is correctly set to 255")
+                        else:
+                            logging.debug(f"m1 setup failed!")
+                except IOError as e:
+                    logging.debug(f"Failed to read m1: {e}")
+
+
+            elif ebyte_type == "e22":
+                logging.debug("Entering into configuration mode..")
+                # M0
+                # Set configuration mode m0
+
+                try:
+                    with open('/sys/class/leds/red_cntrl/brightness', 'w') as f:
+                        f.write("255")
+                except IOError as e:
+                    logging.debug(f"Failed to set m0 (red_cntrl): {e}")
+                # Verify configuration mode m0
+                try:
+                    with open('/sys/class/leds/red_cntrl/brightness', 'r') as f:
+                        m0_status = f.read().strip()
+                        expected_m0_status = "255" 
+                        if m0_status == expected_m0_status:
+                            logging.debug(f"m0 is correctly set to 255")
+                        else:
+                            logging.debug(f"m0 setup failed!")
+                except IOError as e:
+                    logging.debug(f"Failed to read m0: {e}")
+                    
+                # M1
+                # Set configuration mode m1
+                try:
+                    with open('/sys/class/leds/green_cntrl/brightness', 'w') as f:
+                        f.write("0")
+                except IOError as e:
+                    logging.debug(f"Failed to set m1 (green_cntrl): {e}")
+                # Verify configuration mode m1
+                try:
+                    with open('/sys/class/leds/green_cntrl/brightness', 'r') as f:
+                        m0_status = f.read().strip()
+                        expected_m0_status = "0" 
+                        if m0_status == expected_m0_status:
+                            logging.debug(f"m1 is correctly set to 0")
+                        else:
+                            logging.debug(f"m1 setup failed!")
+                except IOError as e:
+                    logging.debug(f"Failed to read m1: {e}")
 
     elif mode == "normal":
         logging.debug("Entering into normal mode..")
         # M0
-        # Set configuration mode m0
+        # Set normal mode m0
         try:
             with open('/sys/class/leds/red_cntrl/brightness', 'w') as f:
                 f.write("0")
         except IOError as e:
             logging.debug(f"Failed to set m0 (red_cntrl): {e}")
-        # Verify configuration mode m0
+        # Verify normal mode m0
         try:
             with open('/sys/class/leds/red_cntrl/brightness', 'r') as f:
                 m0_status = f.read().strip()
@@ -229,13 +274,13 @@ def set_mode(mode):
             logging.debug(f"Failed to read m0: {e}")
             
         # M1
-        # Set configuration mode m1
+        # Set normal mode m1
         try:
             with open('/sys/class/leds/green_cntrl/brightness', 'w') as f:
                 f.write("0")
         except IOError as e:
             logging.debug(f"Failed to set m1 (green_cntrl): {e}")
-        # Verify configuration mode m1
+        # Verify normal mode m1
         try:
             with open('/sys/class/leds/green_cntrl/brightness', 'r') as f:
                 m0_status = f.read().strip()
@@ -304,21 +349,35 @@ def send_configuration_command(serial_port, command, expected_response):
         else:
             logging.debug(f"Unexpected response: {response}, retrying...")
 
-def configure_lora(serial_port, ADDH, ADDL, channel):
+def configure_lora(serial_port, ebyte_type, ADDH, ADDL, channel):
     logging.debug(f"Configuring LoRa module with address: {(ADDH, ADDL)} and channel: {channel}")
 
     # Set to program mode
-    set_mode("configuration")
+    set_mode(ebyte_type, "configuration")
 
-    # Set address
-    address_command = bytes([0xC0, 0x00, 0x03, ADDH, ADDL, 0x62])
-    expected_address_response = bytes([0xC1, 0x00, 0x03, ADDH, ADDL, 0x62])
-    send_configuration_command(serial_port, address_command, expected_address_response)
+    if ebyte_type == "e220":
 
-    # Set channel
-    channel_command = bytes([0xC0, 0x04, 0x01, channel])
-    expected_channel_response = bytes([0xC1, 0x04, 0x01, channel])
-    send_configuration_command(serial_port, channel_command, expected_channel_response)
+        # Set address
+        address_command = bytes([0xC0, 0x00, 0x03, ADDH, ADDL, 0x62])
+        expected_address_response = bytes([0xC1, 0x00, 0x03, ADDH, ADDL, 0x62])
+        send_configuration_command(serial_port, address_command, expected_address_response)
+
+        # Set channel
+        channel_command = bytes([0xC0, 0x04, 0x01, channel])
+        expected_channel_response = bytes([0xC1, 0x04, 0x01, channel])
+        send_configuration_command(serial_port, channel_command, expected_channel_response)
+
+    elif ebyte_type == "e22":
+
+        # Set address
+        address_command = bytes([0xC0, 0x00, 0x04, ADDH, ADDL, 0x00, 0x62])
+        expected_address_response = bytes([0xC1, 0x00, 0x04, ADDH, ADDL, 0x00, 0x62])
+        send_configuration_command(serial_port, address_command, expected_address_response)
+
+        # Set channel
+        channel_command = bytes([0xC0, 0x05, 0x01, channel])
+        expected_channel_response = bytes([0xC1, 0x05, 0x01, channel])
+        send_configuration_command(serial_port, channel_command, expected_channel_response)
     
     # Set to transparent transmission mode
     #transparent_mode_command = bytes([0xC0, 0x05, 0x01, 0x00])
@@ -331,7 +390,7 @@ def configure_lora(serial_port, ADDH, ADDL, channel):
     #send_configuration_command(serial_port, normal_mode_command, expected_normal_mode_response)
 
     time.sleep(2)
-    set_mode("normal")
+    set_mode(ebyte_type, "normal")
 
 def send_data(ser, device_id):
     try:
@@ -621,8 +680,6 @@ async def main_task(context):
 
     setup_pins("OFF")
     setup_pins("ON")
-    set_mode("configuration")
-    set_mode("normal")
 
     try:
         with open("/usr/local/artlite-opaq-app/config/device_config.json", 'r') as f:
@@ -636,6 +693,13 @@ async def main_task(context):
         exit(1)
 
     device_id = get_device_id()
+    ebyte_type = unique_ids[device_id]["ebyteType"]
+
+    logging.debug(f"Eybte Module: {ebyte_type}")
+    
+    set_mode(ebyte_type, "normal")
+    set_mode(ebyte_type, "configuration")
+    set_mode(ebyte_type, "normal")
 
     if device_id in unique_ids:
         logging.debug(f"Device ID {device_id} found in configuration.")
@@ -658,7 +722,7 @@ async def main_task(context):
                     logging.debug(f"UniqueAddr High Byte: {ADDH:#x}")
 
                     with serial.Serial(lora_device, 9600, timeout=1) as ser:
-                        configure_lora(ser, ADDH, ADDL, channel)
+                        configure_lora(ser, ebyte_type, ADDH, ADDL, channel)
 
                         ser.flushInput()
                         ser.flushOutput()
@@ -692,7 +756,7 @@ async def main_task(context):
             logging.debug(f"UniqueAddr Low Byte: {ADDL:#x}")
             logging.debug(f"UniqueAddr High Byte: {ADDH:#x}")
             with serial.Serial(lora_device, 9600, timeout=1) as ser:
-                configure_lora(ser, ADDH, ADDL, channel)
+                configure_lora(ser, ebyte_type, ADDH, ADDL, channel)
 
             try:
                 reader, writer = await serial_asyncio.open_serial_connection(url=lora_device, baudrate=9600)

@@ -10,3 +10,10 @@ receiver_log_buffer.txt
 data/receiver_log_buffer.txt
 .vscode/extensions.json
 secrets.json
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/vcs.xml
+.idea/modules.xml
+.idea/misc.xml
+.idea/deployment.xml
+.idea/artlite-opaq-app.iml
+.idea/

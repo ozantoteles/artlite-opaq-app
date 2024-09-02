@@ -48,6 +48,7 @@ def update_device_config(unique_id, mac_address, json_file_path):
         # Add new device entry
         data[unique_id] = {
             "macAddr": mac_address,
+            "ebyteType": "e220",
             "devType": "sender",
             "channel": "0x17",
             "uniqueAddr": f"0x{address}",
