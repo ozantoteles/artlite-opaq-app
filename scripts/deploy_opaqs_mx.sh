@@ -24,16 +24,20 @@ else
 fi
  
 # Loop through each target and copy the tarball
-#for target in 192.168.1.100 192.168.1.104 192.168.1.108 192.168.1.109 192.168.1.110 192.168.1.114 192.168.1.115 192.168.1.116 192.168.1.118 192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.123 192.168.1.125 192.168.1.126 192.168.1.127 192.168.1.128 192.168.1.129 192.168.1.130 192.168.1.131 192.168.1.132 192.168.1.186; do
+for target in 192.168.1.100 192.168.1.104 192.168.1.108 192.168.1.109 192.168.1.114 192.168.1.115 192.168.1.116 192.168.1.118 192.168.1.120 192.168.1.121 192.168.1.122 192.168.1.123 192.168.1.125 192.168.1.126 192.168.1.127 192.168.1.129 192.168.1.130 192.168.1.131 192.168.1.132 192.168.1.186; do
 #for target in 192.168.1.110 192.168.1.118 192.168.1.126 192.168.1.128; do
-for target in 192.168.1.126; do
+#for target in 192.168.1.104 192.168.109; do
   echo "Copying to $target..."
   eval $(printf "$COPY_CMD" "$target")
   echo "Extracting on $target..."
   ssh -o ForwardX11=no root@$target "tar -xzf /usr/local/$TARBALL_NAME -C /usr/local/ && rm /usr/local/$TARBALL_NAME"
   echo "Done with $target."
-  #ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
-  #echo 'Systemd service restarted.'
+  #ssh -o ForwardX11=no root@$target "rm /usr/local/artlite-opaq-app/config/device_config.json"
+  #echo 'Device config deleted.'
+  #ssh -o ForwardX11=no root@$target "python3.10 /usr/local/artlite-opaq-app/scripts/unique_address_generator.py"
+  #echo 'Device config regenerated.'
+  ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
+  echo 'Systemd service restarted.'
 
 done
  

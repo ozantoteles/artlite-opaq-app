@@ -299,7 +299,7 @@ def get_device_id():
         data = json.load(f)
         return data['val']
 
-def read_response(ser, timeout=10):
+def read_response(ser, timeout=5):
     try:
         logging.debug(f"Listening on {ser} at 9600 baud rate...")
         buffer = bytearray()
@@ -337,17 +337,26 @@ def read_response(ser, timeout=10):
 
 def send_configuration_command(serial_port, command, expected_response):
     success = False
-    while not success:
+    retries = 0
+    max_retries = 3  # Set the maximum number of retries before applying the fix
+    
+    while not success and retries < max_retries:
         logging.debug(f"Sending command: {command.hex()}")
         serial_port.write(command)
         time.sleep(0.1)
         response = read_response(serial_port)
         logging.debug(f"Received response: {response}")
+        
         if response == expected_response.hex():
             logging.debug(f"Received expected response: {response}")
             success = True
         else:
             logging.debug(f"Unexpected response: {response}, retrying...")
+            retries += 1
+    
+    if not success:
+        raise Exception("Failed to receive the expected response after retries.")
+
 
 def configure_lora(serial_port, ebyte_type, ADDH, ADDL, channel):
     logging.debug(f"Configuring LoRa module with address: {(ADDH, ADDL)} and channel: {channel}")
@@ -551,47 +560,56 @@ def initialize_modbus_array(device_mapping_path):
     return modbus_array
 
 def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
-    # Load the device mapping from JSON
-    with open(device_mapping_path, 'r') as f:
-        device_mapping = json.load(f)
+    try:
+        # Load the device mapping from JSON
+        with open(device_mapping_path, 'r') as f:
+            device_mapping = json.load(f)
 
-    unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
-    if unique_id in device_mapping:
-        device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
-        try:
-            # Find the index of this device_id in the flat modbus_array
-            start_index = -1
-            for i in range(0, len(modbus_array), 10):
-                if modbus_array[i] == device_id:
-                    start_index = i
-                    break
-            
-            if start_index == -1:
-                raise ValueError(f"Device ID {device_id} not found in Modbus Array.")
-            
-            logging.debug(f"Updating Modbus Array at index {start_index} for Device ID {device_id}")
-            logging.debug(f"Modbus Array before update: {modbus_array[start_index:start_index + 10]}")
+        # Check if 'UniqueID' exists in parsed_data
+        if 'UniqueID' not in parsed_data:
+            logging.error("Parsed data does not contain 'UniqueID'. Modbus array will not be updated.")
+            return modbus_array
 
-            # Update the array for this device with actual data as unsigned integers
-            modbus_array[start_index:start_index + 10] = [
-                device_id,
-                int(parsed_data['Temperature']) & 0xFFFF,
-                int(parsed_data['Humidity']) & 0xFFFF,
-                int(parsed_data['CO2']) & 0xFFFF,
-                int(parsed_data['VOC']) & 0xFFFF,
-                int(parsed_data['NOx']) & 0xFFFF,
-                int(parsed_data['PM1']) & 0xFFFF,
-                int(parsed_data['PM2_5']) & 0xFFFF,
-                int(parsed_data['PM10']) & 0xFFFF,
-                int(parsed_data['AQI']) & 0xFFFF
-            ]
-            
-            logging.debug(f"Modbus Array after update: {modbus_array[start_index:start_index + 10]}")
+        unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
+        if unique_id in device_mapping:
+            device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
+            try:
+                # Find the index of this device_id in the flat modbus_array
+                start_index = -1
+                for i in range(0, len(modbus_array), 10):
+                    if modbus_array[i] == device_id:
+                        start_index = i
+                        break
+                
+                if start_index == -1:
+                    raise ValueError(f"Device ID {device_id} not found in Modbus Array.")
+                
+                logging.debug(f"Updating Modbus Array at index {start_index} for Device ID {device_id}")
+                logging.debug(f"Modbus Array before update: {modbus_array[start_index:start_index + 10]}")
 
-        except ValueError as e:
-            logging.error(f"Device ID {device_id} not found in Modbus Array. Error: {e}")
-    else:
-        logging.debug(f"UniqueID {unique_id} not found in device mapping.")
+                # Update the array for this device with actual data as unsigned integers
+                modbus_array[start_index:start_index + 10] = [
+                    device_id,
+                    int(parsed_data['Temperature']) & 0xFFFF,
+                    int(parsed_data['Humidity']) & 0xFFFF,
+                    int(parsed_data['CO2']) & 0xFFFF,
+                    int(parsed_data['VOC']) & 0xFFFF,
+                    int(parsed_data['NOx']) & 0xFFFF,
+                    int(parsed_data['PM1']) & 0xFFFF,
+                    int(parsed_data['PM2_5']) & 0xFFFF,
+                    int(parsed_data['PM10']) & 0xFFFF,
+                    int(parsed_data['AQI']) & 0xFFFF
+                ]
+                
+                logging.debug(f"Modbus Array after update: {modbus_array[start_index:start_index + 10]}")
+
+            except ValueError as e:
+                logging.error(f"Device ID {device_id} not found in Modbus Array. Error: {e}")
+        else:
+            logging.debug(f"UniqueID {unique_id} not found in device mapping.")
+
+    except Exception as e:
+        logging.error(f"Error updating Modbus Array: {e}")
 
     return modbus_array
 
@@ -609,47 +627,56 @@ def initialize_cloud_array(device_mapping_path):
     return cloud_array
 
 def update_cloud_array(cloud_array, parsed_data, device_mapping_path):
-    # Load the device mapping from JSON
-    with open(device_mapping_path, 'r') as f:
-        device_mapping = json.load(f)
+    try:
+        # Load the device mapping from JSON
+        with open(device_mapping_path, 'r') as f:
+            device_mapping = json.load(f)
 
-    unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
-    if unique_id in device_mapping:
-        device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
-        try:
-            # Find the index of this device_id in the flat cloud_array
-            start_index = -1
-            for i in range(0, len(cloud_array), 10):
-                if cloud_array[i] == device_id:
-                    start_index = i
-                    break
-            
-            if start_index == -1:
-                raise ValueError(f"Device ID {device_id} not found in Cloud Array.")
-            
-            logging.debug(f"Updating Cloud Array at index {start_index} for Device ID {device_id}")
-            logging.debug(f"Cloud Array before update: {cloud_array[start_index:start_index + 10]}")
+        # Check if 'UniqueID' exists in parsed_data
+        if 'UniqueID' not in parsed_data:
+            logging.error("Parsed data does not contain 'UniqueID'. Cloud array will not be updated.")
+            return cloud_array
 
-            # Update the array for this device with actual data as unsigned integers
-            cloud_array[start_index:start_index + 10] = [
-                device_id,
-                int(parsed_data['Temperature']),
-                int(parsed_data['Humidity']),
-                int(parsed_data['PM1']),
-                int(parsed_data['PM2_5']),
-                int(parsed_data['PM10']),
-                int(parsed_data['CO2']),
-                int(parsed_data['VOC']),
-                int(parsed_data['NOx']),
-                int(parsed_data['AQI'])
-            ]
-            
-            logging.debug(f"Cloud Array after update: {cloud_array[start_index:start_index + 10]}")
+        unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
+        if unique_id in device_mapping:
+            device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
+            try:
+                # Find the index of this device_id in the flat cloud_array
+                start_index = -1
+                for i in range(0, len(cloud_array), 10):
+                    if cloud_array[i] == device_id:
+                        start_index = i
+                        break
+                
+                if start_index == -1:
+                    raise ValueError(f"Device ID {device_id} not found in Cloud Array.")
+                
+                logging.debug(f"Updating Cloud Array at index {start_index} for Device ID {device_id}")
+                logging.debug(f"Cloud Array before update: {cloud_array[start_index:start_index + 10]}")
 
-        except ValueError as e:
-            logging.error(f"Device ID {device_id} not found in Cloud Array. Error: {e}")
-    else:
-        logging.debug(f"UniqueID {unique_id} not found in device mapping.")
+                # Update the array for this device with actual data as unsigned integers
+                cloud_array[start_index:start_index + 10] = [
+                    device_id,
+                    int(parsed_data['Temperature']),
+                    int(parsed_data['Humidity']),
+                    int(parsed_data['PM1']),
+                    int(parsed_data['PM2_5']),
+                    int(parsed_data['PM10']),
+                    int(parsed_data['CO2']),
+                    int(parsed_data['VOC']),
+                    int(parsed_data['NOx']),
+                    int(parsed_data['AQI'])
+                ]
+                
+                logging.debug(f"Cloud Array after update: {cloud_array[start_index:start_index + 10]}")
+
+            except ValueError as e:
+                logging.error(f"Device ID {device_id} not found in Cloud Array. Error: {e}")
+        else:
+            logging.debug(f"UniqueID {unique_id} not found in device mapping.")
+
+    except Exception as e:
+        logging.error(f"Error updating Cloud Array: {e}")
 
     return cloud_array
 
@@ -693,18 +720,26 @@ async def main_task(context):
         exit(1)
 
     device_id = get_device_id()
+    logging.debug(f"Device ID: {device_id}")
+
     ebyte_type = unique_ids[device_id]["ebyteType"]
 
     logging.debug(f"Eybte Module: {ebyte_type}")
     
+    # Initial mode setup
     set_mode(ebyte_type, "normal")
     set_mode(ebyte_type, "configuration")
     set_mode(ebyte_type, "normal")
+
+    logging.debug(f"Checking if Device ID {device_id} is in the configuration.")
+    logging.debug(f"Unique IDs: {unique_ids}")
+    logging.debug(f"Device Type: {unique_ids[device_id]['devType']}")
 
     if device_id in unique_ids:
         logging.debug(f"Device ID {device_id} found in configuration.")
 
         if unique_ids[device_id]["devType"] == "sender":
+            logging.debug("Device is in Sender Mode!")
             while True:
                 try:
                     uniqueAddr_str = unique_ids[device_id]["customAddr"]
@@ -721,17 +756,29 @@ async def main_task(context):
                     logging.debug(f"UniqueAddr Low Byte: {ADDL:#x}")
                     logging.debug(f"UniqueAddr High Byte: {ADDH:#x}")
 
-                    with serial.Serial(lora_device, 9600, timeout=1) as ser:
-                        configure_lora(ser, ebyte_type, ADDH, ADDL, channel)
+                    # Attempt to configure LoRa
+                    while True:
+                        try:
+                            with serial.Serial(lora_device, 9600, timeout=1) as ser:
+                                configure_lora(ser, ebyte_type, ADDH, ADDL, channel)
+                                ser.flushInput()
+                                ser.flushOutput()
 
-                        ser.flushInput()
-                        ser.flushOutput()
+                                time.sleep(1)
 
-                        time.sleep(1)
+                                send_data(ser, device_id)
 
-                        send_data(ser, device_id)
-
-                        time.sleep(5)
+                                time.sleep(5)
+                                break  # Exit loop if successful
+                        except Exception as e:
+                            logging.debug(f"Error during LoRa configuration: {e}")
+                            logging.debug("Applying fix and retrying...")
+                            setup_pins("OFF")
+                            setup_pins("ON")
+                            set_mode(ebyte_type, "normal")
+                            set_mode(ebyte_type, "configuration")
+                            set_mode(ebyte_type, "normal")
+                            time.sleep(2)  # Give it some time before retrying
 
                 except KeyError as e:
                     logging.debug(f"Configuration for device ID {device_id} is incomplete: {e}")
@@ -743,6 +790,7 @@ async def main_task(context):
                     logging.debug(f"Unexpected error: {e}")
                     time.sleep(10)
         else:
+            logging.debug("Device is in Receiver Mode!")
             uniqueAddr_str = unique_ids[device_id]["customAddr"]
             channel_str = unique_ids[device_id]["channel"]
 
@@ -755,8 +803,22 @@ async def main_task(context):
             logging.debug(f"UniqueAddr Hex: {unique_addr_hex:#x}")
             logging.debug(f"UniqueAddr Low Byte: {ADDL:#x}")
             logging.debug(f"UniqueAddr High Byte: {ADDH:#x}")
-            with serial.Serial(lora_device, 9600, timeout=1) as ser:
-                configure_lora(ser, ebyte_type, ADDH, ADDL, channel)
+
+            # Attempt to configure LoRa in receiver mode
+            while True:
+                try:
+                    with serial.Serial(lora_device, 9600, timeout=1) as ser:
+                        configure_lora(ser, ebyte_type, ADDH, ADDL, channel)
+                    break  # Exit loop if successful
+                except Exception as e:
+                    logging.debug(f"Error during LoRa configuration: {e}")
+                    logging.debug("Applying fix and retrying...")
+                    setup_pins("OFF")
+                    setup_pins("ON")
+                    set_mode(ebyte_type, "normal")
+                    set_mode(ebyte_type, "configuration")
+                    set_mode(ebyte_type, "normal")
+                    time.sleep(2)  # Give it some time before retrying
 
             try:
                 reader, writer = await serial_asyncio.open_serial_connection(url=lora_device, baudrate=9600)
@@ -768,40 +830,56 @@ async def main_task(context):
                         buffer.extend(data)
                         
                         while True:
-                            start_index = buffer.find(b'\xcb\xda')
-                            end_index = buffer.find(b'\xbc\x0a')
-                            
-                            if start_index != -1 and end_index != -1 and end_index > start_index:
-                                complete_message = buffer[start_index:end_index + 1]
-                                hex_data = complete_message.hex()
-                                logging.debug(f"Received Data: {hex_data}")
-                                parsed_data = parse_lora_data(hex_data)
-                                logging.debug(f"Parsed Data: {parsed_data}")
-                                log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}", 1000)
-                                modbus_array = update_modbus_array(modbus_array, parsed_data, device_mapping_path)
-                                logging.debug(f"Updated Modbus Array with size {len(modbus_array)}: {modbus_array}")
+                            try:
+                                start_index = buffer.find(b'\xcb\xda')
+                                end_index = buffer.find(b'\xbc\x0a')
                                 
-                                # Update the Modbus holding registers with the new array
-                                store = context[2]  # Access the slave with address 2
-                                store.setValues(3, 0, modbus_array)  # Update function code 3 (holding registers)
-                                
-                                cloud_array = update_cloud_array(cloud_array, parsed_data, device_mapping_path)
-                                logging.debug(f"Updated Cloud Array with size {len(cloud_array)}: {cloud_array}")
+                                if start_index != -1 and end_index != -1 and end_index > start_index:
+                                    complete_message = buffer[start_index:end_index + 1]
+                                    hex_data = complete_message.hex()
+                                    logging.debug(f"Received Data: {hex_data}")
+                                    
+                                    try:
+                                        parsed_data = parse_lora_data(hex_data)
+                                        logging.debug(f"Parsed Data: {parsed_data}")
+                                        log_with_size_limit("/usr/local/artlite-opaq-app/data/receiver_log_buffer.txt", f"Parsed Data: {parsed_data}", 1000)
+                                        modbus_array = update_modbus_array(modbus_array, parsed_data, device_mapping_path)
+                                        logging.debug(f"Updated Modbus Array with size {len(modbus_array)}: {modbus_array}")
+                                        
+                                        # Update the Modbus holding registers with the new array
+                                        store = context[2]  # Access the slave with address 2
+                                        store.setValues(3, 0, modbus_array)  # Update function code 3 (holding registers)
+                                        
+                                        cloud_array = update_cloud_array(cloud_array, parsed_data, device_mapping_path)
+                                        logging.debug(f"Updated Cloud Array with size {len(cloud_array)}: {cloud_array}")
 
-                                buffer = buffer[end_index + 1:]
-                            else:
+                                    except Exception as e:
+                                        logging.error(f"Error processing parsed data: {e}")
+
+                                    buffer = buffer[end_index + 1:]
+                                else:
+                                    break
+                            
+                            except Exception as e:
+                                logging.error(f"Error while processing buffer: {e}")
                                 break
-                                
+                        
                         await asyncio.sleep(1)
 
                     except asyncio.CancelledError:
                         logging.debug("Task cancelled.")
                         break
+                    except Exception as e:
+                        logging.error(f"Error in main loop: {e}")
+                        break
 
             except serial.SerialException as e:
-                logging.debug(f"Serial communication error: {e}")
+                logging.error(f"Serial communication error: {e}")
             except KeyboardInterrupt:
                 logging.debug("Stopped listening.")
+            except Exception as e:
+                logging.error(f"Unexpected error: {e}")
+
 
     else:
         logging.debug(f"Device ID {device_id} not found in configuration.")
