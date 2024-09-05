@@ -41,10 +41,10 @@ class SensorHandler:
         else: # CO2, PM, BAT
             try:
                 sensorBus = sensor.init(busNo)
-                print('%s initialized successfully.',sensorName)
+                print(f'{sensorName} initialized successfully.')
                 return sensorBus
             except Exception as e:
-                print('Error initializing %s: %s',sensorName,e)
+                print(f'Error initializing {sensorName}: {e}')
                 return -1
    
     def read_sensor(self, sensor, sensorBus, sensorName, i2cTransceiver = None, sensorModel = None, temp = None, hum = None):    
@@ -54,7 +54,7 @@ class SensorHandler:
                 return data
             except Exception as e:
                 i2cTransceiver.close()
-                print('Error reading %s: %s',sensorName,e)
+                print(f'Error reading {sensorName}: {e}')
                 return -999
                 
         elif i2cTransceiver != None and sensorModel == None: # SHT
@@ -63,15 +63,16 @@ class SensorHandler:
                 return data
             except Exception as e:
                 i2cTransceiver.close()
-                print('Error reading %s: %s',sensorName,e)
+                print(f'Error reading {sensorName}: {e}')
                 return -999
                 
         else: # CO2, PM, BAT
             try:
-                data = sensor.read(sensorBus) 
+                data = sensor.read(sensorBus)
                 return data
             except Exception as e:
-                print('Error reading %s: %s',sensorName,e)
+                sensorBus.close()
+                print(f'Error reading {sensorName}: {e}')
                 return -999
                 
     def handler(self):
