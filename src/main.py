@@ -45,6 +45,11 @@ client = None
 modbus_device = None
 lora_device = None
 
+# Time intervals
+MONITOR_INTERVAL = 10 * 60  # 10 minutes in seconds
+
+# Store last update times
+last_update_times = {}
 
 def get_value_callback(index):
     def callback(client, value_name=None):
@@ -578,6 +583,7 @@ def initialize_modbus_array(device_mapping_path):
 
 def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
     try:
+        global last_update_times
         # Load the device mapping from JSON
         with open(device_mapping_path, 'r') as f:
             device_mapping = json.load(f)
@@ -587,38 +593,36 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
             logging.error("Parsed data does not contain 'UniqueID'. Modbus array will not be updated.")
             return modbus_array
 
-        unique_id = parsed_data['UniqueID'].strip('"')  # Remove the extra quotes from UniqueID
+        unique_id = parsed_data.get('UniqueID', '').strip('"')  # Remove the extra quotes from UniqueID
         if unique_id in device_mapping:
             device_id = int(device_mapping[unique_id])  # Convert to unsigned integer
             try:
                 # Find the index of this device_id in the flat modbus_array
-                start_index = -1
-                for i in range(0, len(modbus_array), 10):
-                    if modbus_array[i] == device_id:
-                        start_index = i
-                        break
-
+                start_index = find_device_index(device_id)
                 if start_index == -1:
                     raise ValueError(f"Device ID {device_id} not found in Modbus Array.")
-
+                
                 logging.debug(f"Updating Modbus Array at index {start_index} for Device ID {device_id}")
                 logging.debug(f"Modbus Array before update: {modbus_array[start_index:start_index + 10]}")
 
                 # Update the array for this device with actual data as unsigned integers
                 modbus_array[start_index:start_index + 10] = [
                     device_id,
-                    int(parsed_data['Temperature']) & 0xFFFF,
-                    int(parsed_data['Humidity']) & 0xFFFF,
-                    int(parsed_data['CO2']) & 0xFFFF,
-                    int(parsed_data['VOC']) & 0xFFFF,
-                    int(parsed_data['NOx']) & 0xFFFF,
-                    int(parsed_data['PM1']) & 0xFFFF,
-                    int(parsed_data['PM2_5']) & 0xFFFF,
-                    int(parsed_data['PM10']) & 0xFFFF,
-                    int(parsed_data['AQI']) & 0xFFFF
+                    int(parsed_data.get('Temperature', 0)) & 0xFFFF,
+                    int(parsed_data.get('Humidity', 0)) & 0xFFFF,
+                    int(parsed_data.get('CO2', 0)) & 0xFFFF,
+                    int(parsed_data.get('VOC', 0)) & 0xFFFF,
+                    int(parsed_data.get('NOx', 0)) & 0xFFFF,
+                    int(parsed_data.get('PM1', 0)) & 0xFFFF,
+                    int(parsed_data.get('PM2_5', 0)) & 0xFFFF,
+                    int(parsed_data.get('PM10', 0)) & 0xFFFF,
+                    int(parsed_data.get('AQI', 0)) & 0xFFFF
                 ]
-
+                
                 logging.debug(f"Modbus Array after update: {modbus_array[start_index:start_index + 10]}")
+
+                # Update last update time
+                last_update_times[device_id] = datetime.now()
 
             except ValueError as e:
                 logging.error(f"Device ID {device_id} not found in Modbus Array. Error: {e}")
@@ -630,6 +634,28 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
 
     return modbus_array
 
+
+
+def find_device_index(device_id):
+    """Find the start index of a device in the modbus_array."""
+    for i in range(0, len(modbus_array), 10):
+        if modbus_array[i] == device_id:
+            return i
+    return -1
+
+async def monitor_modbus_array():
+    global last_update_times
+    while True:
+        now = datetime.now()
+        for device_id in last_update_times.keys():
+            last_update_time = last_update_times[device_id]
+            if (now - last_update_time).total_seconds() > MONITOR_INTERVAL:
+                # Handle outdated data by setting it to FFs
+                start_index = find_device_index(device_id)
+                if start_index != -1:
+                    logging.info(f"Device {device_id} not updated for a while. Updating Modbus array.")
+                    modbus_array[start_index:start_index + 10] = [0xFF] * 10
+        await asyncio.sleep(60)  # Check every minute
 
 def initialize_cloud_array(device_mapping_path):
     # Load the device mapping from JSON
@@ -939,25 +965,27 @@ async def run_all():
         # Create a Modbus datastore with initial values
         hr_block = ModbusSequentialDataBlock(0, modbus_array)  # Create a holding register block
         store = ModbusSlaveContext(
-            di=ModbusSequentialDataBlock(0, [0] * 100),  # Discrete Inputs
-            co=ModbusSequentialDataBlock(0, [0] * 100),  # Coils
+            di=ModbusSequentialDataBlock(0, [0]*100),  # Discrete Inputs
+            co=ModbusSequentialDataBlock(0, [0]*100),  # Coils
             hr=hr_block,  # Holding Registers
-            ir=ModbusSequentialDataBlock(0, [0] * 100)  # Input Registers
+            ir=ModbusSequentialDataBlock(0, [0]*100)   # Input Registers
         )
         context = ModbusServerContext(slaves={2: store}, single=False)  # Set Slave Address to 2
 
         task1 = asyncio.create_task(run_modbus_slave(modbus_array, modbus_device, context))
+        task2 = asyncio.create_task(monitor_modbus_array())
     else:
         logging.debug("Modbus operations are skipped due to no connected MODBUS module.")
         task1 = None
+        task2 = None
 
     try:
-        task2 = asyncio.create_task(main_task(context if modbus_device else None))
+        main_task_instance = asyncio.create_task(main_task(context if modbus_device else None))
 
         if task1 is not None:
-            await asyncio.gather(task1, task2)
+            await asyncio.gather(task1, main_task_instance, task2)
         else:
-            await task2  # Only run the main task if Modbus operations are skipped
+            await main_task_instance  # Only run the main task if Modbus operations are skipped
     except asyncio.CancelledError:
         logging.debug("Tasks cancelled.")
     finally:
