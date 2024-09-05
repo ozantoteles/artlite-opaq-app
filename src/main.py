@@ -634,6 +634,19 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
 
     return modbus_array
 
+def handle_message(message, device_id):
+    # Check if the message contains the unique device ID
+    if f"{device_id}" in message:
+        if "SERVICE_RESTART" in message:
+            logging.debug("Service restart command received.")
+            os.system("systemctl restart artlite-opaq-app.service")
+        elif "REBOOT" in message:
+            logging.debug("Reboot command received.")
+            os.system("reboot")
+        else:
+            logging.debug(f"Received other message with ID: {message}")
+    else:
+        logging.debug(f"Received message without matching ID: {message}")
 
 
 def find_device_index(device_id):
@@ -814,7 +827,16 @@ async def main_task(context):
 
                                 send_data(ser, device_id)
 
-                                time.sleep(5)
+                                end_time = time.time() + 5  # Calculate the end time (5 seconds from now)
+                                
+                                while time.time() < end_time:
+                                    if ser.in_waiting > 0:  # Check if there's incoming data
+                                        response = ser.readline().decode().strip()
+                                        if response:
+                                            logging.debug(f"Received message from gateway: {response}")
+                                            handle_message(response, device_id)
+                                    time.sleep(0.1)  # Small delay to avoid high CPU usage
+                                
                                 break  # Exit loop if successful
                         except Exception as e:
                             logging.debug(f"Error during LoRa configuration: {e}")
@@ -942,7 +964,6 @@ async def run_all():
     global modbus_device
     global lora_device
 
-    
     setup_pins("OFF")
     setup_pins("ON")
 
