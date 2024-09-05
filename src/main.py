@@ -650,11 +650,12 @@ async def monitor_modbus_array():
         for device_id in last_update_times.keys():
             last_update_time = last_update_times[device_id]
             if (now - last_update_time).total_seconds() > MONITOR_INTERVAL:
-                # Handle outdated data by setting it to FFs
+                # Handle outdated data by setting only the last element to FF
                 start_index = find_device_index(device_id)
                 if start_index != -1:
                     logging.info(f"Device {device_id} not updated for a while. Updating Modbus array.")
-                    modbus_array[start_index:start_index + 10] = [0xFF] * 10
+                    # Update only the last element of the 10 data points
+                    modbus_array[start_index + 9] = 0xFF
         await asyncio.sleep(60)  # Check every minute
 
 def initialize_cloud_array(device_mapping_path):
@@ -752,8 +753,6 @@ async def main_task(context):
     global modbus_array
     global cloud_array
 
-    setup_pins("OFF")
-    setup_pins("ON")
 
     try:
         with open("/usr/local/artlite-opaq-app/config/device_config.json", 'r') as f:
@@ -942,6 +941,10 @@ async def run_all():
     global cloud_array
     global modbus_device
     global lora_device
+
+    
+    setup_pins("OFF")
+    setup_pins("ON")
 
     lora_device = get_ttyUSB_device('FTDI Module Connected to Lora Module')
     modbus_device = get_ttyUSB_device('FTDI Module Connected to MODBUS Module')
