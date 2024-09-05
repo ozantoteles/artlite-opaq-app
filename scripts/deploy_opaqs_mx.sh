@@ -36,8 +36,8 @@ for target in 192.168.1.126; do
   #echo 'Device config deleted.'
   #ssh -o ForwardX11=no root@$target "python3.10 /usr/local/artlite-opaq-app/scripts/unique_address_generator.py"
   #echo 'Device config regenerated.'
-  ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
-  echo 'Systemd service restarted.'
+  #ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
+  #echo 'Systemd service restarted.'
 
 done
  

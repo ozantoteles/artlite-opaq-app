@@ -1,32 +1,51 @@
 #!/bin/bash
+set -x
 
 # Log file path
-LOGFILE="/var/log/artlite-opaq-app-setup.log"
+LOGFILE="/var/log/artlite-opaq-setup.log"
 
 # Redirect stdout and stderr to the log file
 exec > >(tee -a ${LOGFILE} )
 exec 2>&1
 
-# Directory where the app will be installed
-INSTALL_DIR="/usr/local/artlite-opaq-app"
+# Directories where the apps will be installed
+ARTLITE_Opaq_DIR="/usr/local/artlite-opaq-app"
+BLE_CONFIGURATOR_DIR="/usr/local/artlite-opaq-ble-configurator-app"
 
-echo "Starting Artlite Opaq APP setup..." 
+echo "Starting Artlite Opaq APP and BLE Configurator setup..."
 
-# Download the repository from GitHub
-echo "Downloading the repository from GitHub..."
+# Download the repository from GitHub for artlite-opaq-app
+echo "Downloading the Artlite Opaq APP repository from GitHub..."
 wget -q https://github.com/ozantoteles/artlite-opaq-app/archive/refs/heads/master.zip -O /tmp/artlite-opaq-app.zip
-echo "Repository downloaded."
+echo "Artlite Opaq APP repository downloaded."
 
 # Extract the repository to /usr/local
-echo "Extracting repository..."
+echo "Extracting Artlite Opaq APP repository..."
 unzip -o /tmp/artlite-opaq-app.zip -d /usr/local/
-mv /usr/local/artlite-opaq-app-master $INSTALL_DIR
+# Overwrite the existing directory with cp
+cp -rf /usr/local/artlite-opaq-app-master/* $ARTLITE_Opaq_DIR/
+rm -rf /usr/local/artlite-opaq-app-master
 rm /tmp/artlite-opaq-app.zip
-echo "Repository extracted to $INSTALL_DIR."
+echo "Artlite Opaq APP repository extracted to $ARTLITE_Opaq_DIR."
 
-# Create the service file
+# Download the repository from GitHub for BLE Configurator
+echo "Downloading the Artlite Opaq BLE Configurator repository from GitHub..."
+wget -q https://github.com/ozantoteles/artlite-opaq-ble-configurator-app/archive/refs/heads/master.zip -O /tmp/artlite-opaq-ble-configurator-app.zip
+echo "Artlite Opaq BLE Configurator repository downloaded."
+
+# Extract the repository to /usr/local
+echo "Extracting BLE Configurator repository..."
+unzip -o /tmp/artlite-opaq-ble-configurator-app.zip -d /usr/local/
+# Overwrite the existing directory with cp
+cp -rf /usr/local/artlite-opaq-ble-configurator-app-master/* $BLE_CONFIGURATOR_DIR/
+rm -rf /usr/local/artlite-opaq-ble-configurator-app-master
+rm /tmp/artlite-opaq-ble-configurator-app.zip
+echo "Artlite Opaq BLE Configurator repository extracted to $BLE_CONFIGURATOR_DIR."
+
+
+# Create the service file for Artlite Opaq APP
 SERVICE_FILE_PATH="/lib/systemd/system/artlite-opaq-app.service"
-echo "Creating the systemd service file at $SERVICE_FILE_PATH..."
+echo "Creating the systemd service file for Artlite Opaq APP at $SERVICE_FILE_PATH..."
 cat <<EOL > $SERVICE_FILE_PATH
 [Unit]
 Description=Artlite Opaq APP
@@ -42,16 +61,42 @@ Group=root
 PermissionsStartOnly=true
 StandardError=journal
 StandardOutput=journal
-WorkingDirectory=$INSTALL_DIR
+WorkingDirectory=$ARTLITE_Opaq_DIR
 ExecStartPre=/bin/sleep 120
 ExecStartPre=/bin/systemctl stop cair-app.service
-ExecStart=/usr/bin/python3.10 $INSTALL_DIR/src/main.py
+ExecStart=/usr/bin/python3.10 $ARTLITE_Opaq_DIR/src/main.py
 TimeoutStartSec=180
 
 [Install]
 WantedBy=multi-user.target
 EOL
-echo "Systemd service file created."
+echo "Systemd service file for Artlite Opaq APP created."
+
+# Create the service file for BLE Configurator
+BLE_SERVICE_FILE_PATH="/lib/systemd/system/artlite-opaq-ble-configurator-app.service"
+echo "Creating the systemd service file for BLE Configurator at $BLE_SERVICE_FILE_PATH..."
+cat <<EOL > $BLE_SERVICE_FILE_PATH
+[Unit]
+Description=Artlite Opaq BLE Configurator APP
+RequiresMountsFor=/run
+After=artlite-opaq-app.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=root
+Group=root
+PermissionsStartOnly=true
+StandardError=journal
+StandardOutput=journal
+WorkingDirectory=$BLE_CONFIGURATOR_DIR
+ExecStart=/usr/bin/python3.10 $BLE_CONFIGURATOR_DIR/src/main.py
+
+[Install]
+WantedBy=multi-user.target
+EOL
+echo "Systemd service file for BLE Configurator created."
 
 # Install necessary Python packages
 echo "Checking and installing necessary Python packages..."
@@ -110,17 +155,23 @@ else
   echo "pyudev is already installed."
 fi
 
-# Run the unique address generator script
-echo "Running unique address generator..."
-python3.10 $INSTALL_DIR/scripts/unique_address_generator.py
+# Run the unique address generator script for Artlite Opaq APP
+echo "Running unique address generator for Artlite Opaq APP..."
+python3.10 $ARTLITE_Opaq_DIR/scripts/unique_address_generator.py
 echo "Unique address generation complete."
 
-# Set up the systemd service
-echo "Setting up the systemd service..."
+# Set up the systemd service for Artlite Opaq APP
+echo "Setting up the systemd service for Artlite Opaq APP..."
 systemctl daemon-reload
 systemctl enable artlite-opaq-app.service
 systemctl start artlite-opaq-app.service
-echo "Systemd service setup complete."
+echo "Systemd service setup for Artlite Opaq APP complete."
+
+# Set up the systemd service for BLE Configurator
+echo "Setting up the systemd service for BLE Configurator..."
+systemctl enable artlite-opaq-ble-configurator-app.service
+systemctl start artlite-opaq-ble-configurator-app.service
+echo "Systemd service setup for BLE Configurator complete."
 
 # Set bootdelay to 0
 echo "Setting bootdelay to 0..."
@@ -128,4 +179,4 @@ fw_setenv bootdelay 0
 fw_printenv bootdelay
 echo "Bootdelay set to 0."
 
-echo "Artlite Opaq APP setup complete."
+echo "Artlite Opaq APP and BLE Configurator setup complete."
