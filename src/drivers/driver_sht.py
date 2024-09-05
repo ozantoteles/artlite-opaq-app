@@ -34,8 +34,6 @@ def init(busNo, sensorName, addr=Z7N904R_SHT30_ADDR):
         i2c_transceiver_sht.close()
         return -1, -1  
     
-
-    
     return sht, i2c_transceiver_sht
     
     
