@@ -14,6 +14,9 @@ BLE_CONFIGURATOR_DIR="/usr/local/artlite-opaq-ble-configurator-app"
 
 echo "Starting Artlite Opaq APP and BLE Configurator setup..."
 
+# Attempt to move sshd.socket file, but don't fail the script if it fails
+mv /lib/systemd/system/sshd.socket\@disabled /lib/systemd/system/sshd.socket || true
+
 # Download the repository from GitHub for artlite-opaq-app
 echo "Downloading the Artlite Opaq APP repository from GitHub..."
 wget -q https://github.com/ozantoteles/artlite-opaq-app/archive/refs/heads/master.zip -O /tmp/artlite-opaq-app.zip
