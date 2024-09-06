@@ -132,7 +132,7 @@ echo "Systemd service file for BLE Configurator created."
 echo "Updating device configuration..."
 
 # Build the command, conditionally appending --customAddr only if CUSTOM_ADDR is not empty
-CMD="python3.10 $ARTLITE_Opaq_DIR/src/unique_address_generator.py --channel $CHANNEL --ebyteType $EBYTE_TYPE --devType $DEV_TYPE"
+CMD="python3.10 $ARTLITE_Opaq_DIR/scripts/unique_address_generator.py --channel $CHANNEL --ebyteType $EBYTE_TYPE --devType $DEV_TYPE"
 
 if [ -n "$CUSTOM_ADDR" ]; then
   CMD="$CMD --customAddr $CUSTOM_ADDR"
