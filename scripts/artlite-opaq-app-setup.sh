@@ -5,12 +5,40 @@ set -x
 LOGFILE="/var/log/artlite-opaq-setup.log"
 
 # Redirect stdout and stderr to the log file
-exec > >(tee -a ${LOGFILE} )
+exec > >(tee -a ${LOGFILE})
 exec 2>&1
 
 # Directories where the apps will be installed
 ARTLITE_Opaq_DIR="/usr/local/artlite-opaq-app"
 BLE_CONFIGURATOR_DIR="/usr/local/artlite-opaq-ble-configurator-app"
+
+# Default values for arguments
+CHANNEL="0x17"
+CUSTOM_ADDR=""
+EBYTE_TYPE="e220"
+DEV_TYPE="sender"
+
+# Parse command-line arguments
+while getopts "c:a:e:d:" opt; do
+  case ${opt} in
+    c )
+      CHANNEL=$OPTARG
+      ;;
+    a )
+      CUSTOM_ADDR=$OPTARG
+      ;;
+    e )
+      EBYTE_TYPE=$OPTARG
+      ;;
+    d )
+      DEV_TYPE=$OPTARG
+      ;;
+    \? )
+      echo "Usage: cmd [-c channel] [-a customAddr] [-e ebyteType] [-d devType]"
+      exit 1
+      ;;
+  esac
+done
 
 echo "Starting Artlite Opaq APP and BLE Configurator setup..."
 
@@ -44,7 +72,6 @@ cp -rf /usr/local/artlite-opaq-ble-configurator-app-master/* $BLE_CONFIGURATOR_D
 rm -rf /usr/local/artlite-opaq-ble-configurator-app-master
 rm /tmp/artlite-opaq-ble-configurator-app.zip
 echo "Artlite Opaq BLE Configurator repository extracted to $BLE_CONFIGURATOR_DIR."
-
 
 # Create the service file for Artlite Opaq APP
 SERVICE_FILE_PATH="/lib/systemd/system/artlite-opaq-app.service"
@@ -94,12 +121,25 @@ PermissionsStartOnly=true
 StandardError=journal
 StandardOutput=journal
 WorkingDirectory=$BLE_CONFIGURATOR_DIR
-ExecStart=/usr/bin/python3.10 $BLE_CONFIGURATOR_DIR/src/main.py
+ExecStart=/usr/bin/python $BLE_CONFIGURATOR_DIR/src/main.py
 
 [Install]
 WantedBy=multi-user.target
 EOL
 echo "Systemd service file for BLE Configurator created."
+
+# Update the device configuration using the Python script
+echo "Updating device configuration..."
+
+# Build the command, conditionally appending --customAddr only if CUSTOM_ADDR is not empty
+CMD="python3.10 $ARTLITE_Opaq_DIR/src/unique_address_generator.py --channel $CHANNEL --ebyteType $EBYTE_TYPE --devType $DEV_TYPE"
+
+if [ -n "$CUSTOM_ADDR" ]; then
+  CMD="$CMD --customAddr $CUSTOM_ADDR"
+fi
+
+# Execute the command
+$CMD
 
 # Install necessary Python packages
 echo "Checking and installing necessary Python packages..."
@@ -158,11 +198,6 @@ else
   echo "pyudev is already installed."
 fi
 
-# Run the unique address generator script for Artlite Opaq APP
-echo "Running unique address generator for Artlite Opaq APP..."
-python3.10 $ARTLITE_Opaq_DIR/scripts/unique_address_generator.py
-echo "Unique address generation complete."
-
 # Set up the systemd service for Artlite Opaq APP
 echo "Setting up the systemd service for Artlite Opaq APP..."
 systemctl daemon-reload
@@ -182,4 +217,4 @@ fw_setenv bootdelay 0
 fw_printenv bootdelay
 echo "Bootdelay set to 0."
 
-echo "Artlite Opaq APP and BLE Configurator setup complete."
+echo "Artlite Opaq APP and BLE Configurator setup completed."
