@@ -3,14 +3,15 @@ import time
 import argparse
 import sys
 import json
-
+from datetime import datetime
+import os
 
 if sys.version_info[:2] == (3, 10):
     import smbus2 as smbus
 else:
     import smbus
 
-
+log_file = "/usr/local/artlite-opaq-app/data/co2_calibration_log.txt"
 
 #for reference to Wuhan Cubic CM1107 sensor look at https://teams.microsoft.com/l/file/2ACD82CA-5781-4313-B232-071C023A9F8B?tenantId=ef5926db-9bdf-4f9f-9066-d8e7f03943f7&fileType=pdf&objectUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA%2FShared%20Documents%2FGeneral%2FDonan%C4%B1m%2FDatasheet%2FCM1107.pdf&baseUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA&serviceName=teams&threadId=19:dc5e5b9ac9cc4d49b2ef5ec90748f095@thread.skype&groupId=7cfa0503-c29f-4147-a5c7-e088994d1bfb
 
@@ -179,6 +180,63 @@ def read(bus):
 
     # return co2, status_byte # status byte handling is done inside the function for now
 
+def calculate_checksum(data):
+    # Calculate the sum of the data bytes
+    total = sum(data)
+    # Compute the checksum as the negative of the total, keeping only the lowest byte
+    checksum = -total & 0xFF
+    return checksum
+
+def log_calibration(log_file, target_ppm, command):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Check if the file exists
+    file_exists = os.path.isfile(log_file)
+    
+    with open(log_file, mode='a') as file:
+        if file_exists:
+            file.write("\n")  # Add a new line before the next log entry if file already exists
+        
+        # Write the log entry in one line
+        file.write("{} | Target ppm: {} | Calibration Result Command: {}".format(timestamp, target_ppm, command))
+        print("Wrote to file " + log_file)
+    
+def calibrate_sensor(bus,target_ppm):
+    if not (400 <= target_ppm <= 1500):
+        print("Target ppm should be between 400 and 1500!")
+        return "error"
+ 
+    # Convert target_ppm to high and low bytes
+    DF0 = (target_ppm >> 8) & 0xFF # high byte
+    DF1 = target_ppm & 0xFF # low byte
+ 
+    # Send the command to the sensor
+    bus.write_i2c_block_data(CM1107, clb_cmd, [DF0, DF1])
+    print("Sent: Command={}, DF0={}, DF1={}".format(clb_cmd, DF0, DF1))
+    calculated_checksum = calculate_checksum([clb_cmd, DF0, DF1])
+    print("Checksum: ",calculated_checksum)
+    # Wait for the sensor to respond
+    time.sleep(1)
+    # Read the response (should be 4 bytes)
+    response = bus.read_i2c_block_data(CM1107, clb_cmd, 4)
+ 
+    if len(response) == 4:
+        print("Received: Command={}, DF0={}, DF1={}, CS={}".format(response[0], response[1], response[2], response[3]))
+ 
+        # Verify checksum 
+        if response[3] == (calculated_checksum):  
+            print("Checksum valid")
+            log_calibration(log_file, target_ppm, response)
+            return response
+        else:
+            print("Checksum invalid")
+            return "error"
+ 
+    else:
+        print("Error: Unexpected response length")
+        return "error"
+
+        
 def get_serial_number(bus):
     """
     Sends the command 0x1F to the CM1107 sensor to get the serial number.
@@ -285,12 +343,20 @@ def main():
 
     parser.add_argument("-r", "--run_mode", type=str, default="normal", required=False, help = help_msg)      
     parser.add_argument("-o", "--output_file", type=str, default="/tmp/sensor_co2_out", required=False, help = help_msg_output_file)
+    parser.add_argument("-t", "--target_ppm", type=str, default=400, required=False, help = help_msg_output_file)
 
     args = parser.parse_args()
 
     if args.run_mode == "ftc":
         ftc_mode(args.output_file)
-
+        
+    elif args.run_mode == "calib":
+        print("Calibration mode is active")
+        print("args.target_ppm: ",args.target_ppm)
+        bus = init(0)
+        response = calibrate_sensor(bus,int(args.target_ppm))
+        print("Calibration response: ",response)
+    
     bus = init(0)
     co2_data = read(bus)
 
