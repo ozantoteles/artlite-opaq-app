@@ -94,7 +94,7 @@ PermissionsStartOnly=true
 StandardError=journal
 StandardOutput=journal
 WorkingDirectory=$BLE_CONFIGURATOR_DIR
-ExecStart=/usr/bin/python3.10 $BLE_CONFIGURATOR_DIR/src/main.py
+ExecStart=/usr/bin/python $BLE_CONFIGURATOR_DIR/src/main.py
 
 [Install]
 WantedBy=multi-user.target
