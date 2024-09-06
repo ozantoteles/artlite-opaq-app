@@ -42,6 +42,11 @@ done
 
 echo "Starting Artlite Opaq APP and BLE Configurator setup..."
 
+# Ensure target directories exist, create them if they don't
+echo "Checking if directories exist..."
+[ ! -d "$ARTLITE_Opaq_DIR" ] && mkdir -p "$ARTLITE_Opaq_DIR"
+[ ! -d "$BLE_CONFIGURATOR_DIR" ] && mkdir -p "$BLE_CONFIGURATOR_DIR"
+
 # Attempt to move sshd.socket file, but don't fail the script if it fails
 mv /lib/systemd/system/sshd.socket\@disabled /lib/systemd/system/sshd.socket || true
 
