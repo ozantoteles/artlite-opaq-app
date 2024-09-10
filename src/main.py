@@ -465,8 +465,7 @@ def read_sensor():
     dataPM2_5 = sensor_data["CAIRPM2008_2.5_TSI_LEVEL"]
     dataPM10 = sensor_data["CAIRPM2008_10_TSI_LEVEL"]
 
-    sttCairHealthLevel, sttCairHealthStatus = getQuality("/usr/local/artlite-opaq-app/data/AQI.json", dataNO2, dataVOC,
-                                                         dataPM10, dataPM1_0, dataCO2, dataPM2_5)
+    sttCairHealthLevel, sttCairHealthStatus = getQuality("/usr/local/artlite-opaq-app/data/AQI.json", dataNO2 = dataNO2, dataVOC = dataVOC, dataPM10 = dataPM10, dataPM1_0 = dataPM1_0, dataCO2 = dataCO2, dataPM2_5 = dataPM2_5)
 
     serial_message = (
             ";" +
