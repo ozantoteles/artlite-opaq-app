@@ -12,6 +12,7 @@ else:
     import smbus
 
 log_file = "/usr/local/artlite-opaq-app/data/co2_calibration_log.txt"
+#CO2_LOG_PATH = "/usr/local/artlite-opaq-app/data/co2_data.txt"
 
 #for reference to Wuhan Cubic CM1107 sensor look at https://teams.microsoft.com/l/file/2ACD82CA-5781-4313-B232-071C023A9F8B?tenantId=ef5926db-9bdf-4f9f-9066-d8e7f03943f7&fileType=pdf&objectUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA%2FShared%20Documents%2FGeneral%2FDonan%C4%B1m%2FDatasheet%2FCM1107.pdf&baseUrl=https%3A%2F%2Farcelik.sharepoint.com%2Fteams%2FC-AIRUCLA&serviceName=teams&threadId=19:dc5e5b9ac9cc4d49b2ef5ec90748f095@thread.skype&groupId=7cfa0503-c29f-4147-a5c7-e088994d1bfb
 
@@ -44,7 +45,19 @@ def init(busNo):
     # get_software_version(bus)
     return bus
 
-    
+def log_co2_value(log_file, value):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    file_exists = os.path.isfile(log_file)
+    with open(log_file, mode='a') as file:
+        if file_exists:
+            file.write("\n")  # Add a new line before the next log entry if file already exists
+        
+        # Write the log entry in one line
+        try:
+            file.write("{} : {}".format(timestamp, value))
+        except:
+            pass
+            
 def read(bus):
     """
     This function takes an smbus.SMBus object as its argument and uses it to 
@@ -108,53 +121,67 @@ def read(bus):
     #print(CM1107data)
 
     return CM1107data """
+    max_retries = 3
+    attempts = 0
+    while attempts <= max_retries:
+        # Send command to measure result
+        bus.write_byte(CM1107,read_cmd)
+        
+        # Wait for the sensor to finish measuring
+        time.sleep(0.5)
+        
+        # Read data from the sensor
+        data = bus.read_i2c_block_data(CM1107, read_cmd, 5)
+        
+        bus.close()
+        # print("data: ", data)
 
-    # Send command to measure result
-    bus.write_byte(CM1107,read_cmd)
-    
-    # Wait for the sensor to finish measuring
-    time.sleep(0.5)
-    
-    # Read data from the sensor
-    data = bus.read_i2c_block_data(CM1107, read_cmd, 5)
-    
+        # print("data[0]: ", data[0],
+        #       "data[1]: ", data[1],
+        #       "data[2]: ", data[2],
+        #       "data[3]: ", data[3],
+        #       "data[4]: ", data[4],)
+        
+        
+        
+        # Extract status byte from data
+        status_byte = data[3]
+        bit7 = (status_byte & 0b10000000) >> 7
+        bit6 = (status_byte & 0b01000000) >> 6
+        bit5 = (status_byte & 0b00100000) >> 5
+        bit4 = (status_byte & 0b00010000) >> 4
+        bit3 = (status_byte & 0b00001000) >> 3
+        bit2 = (status_byte & 0b00000100) >> 2
+        bit1 = (status_byte & 0b00000010) >> 1
+        bit0 = status_byte & 0b00000001
+
+        # Extract CO2 measuring result from data
+        if bit1 == 1:
+            print("Error: Sensor error detected")
+            #return -999
+        elif bit2 == 1:
+            print("Error: Measurement range over range")
+            #return data_upper_limit
+        elif bit3 == 1:
+            print("Error: Measurement range less than range")
+            #return data_lower_limit
+        else:
+            co2 = (data[1] << 8) + data[2]
+            # print("co2: ", co2)
+            if co2 > 400 and co2 < 5000:
+                #log_co2_value(CO2_LOG_PATH,co2)
+                print("co2: ", co2)
+                return co2 
+
+        # If an error is detected, increase the attempt count
+        attempts += 1
+        time.sleep(1)
+        
+        bus = init(0)
+        
+    print("Error: Max retries exceeded.")
     bus.close()
-    # print("data: ", data)
-
-    # print("data[0]: ", data[0],
-    #       "data[1]: ", data[1],
-    #       "data[2]: ", data[2],
-    #       "data[3]: ", data[3],
-    #       "data[4]: ", data[4],)
-    
-    
-    
-    # Extract status byte from data
-    status_byte = data[3]
-    bit7 = (status_byte & 0b10000000) >> 7
-    bit6 = (status_byte & 0b01000000) >> 6
-    bit5 = (status_byte & 0b00100000) >> 5
-    bit4 = (status_byte & 0b00010000) >> 4
-    bit3 = (status_byte & 0b00001000) >> 3
-    bit2 = (status_byte & 0b00000100) >> 2
-    bit1 = (status_byte & 0b00000010) >> 1
-    bit0 = status_byte & 0b00000001
-
-    # Extract CO2 measuring result from data
-    if bit1 == 1:
-        print("Error: Sensor error detected")
-        return -999
-    elif bit2 == 1:
-        print("Error: Measurement range over range")
-        return data_upper_limit
-    elif bit3 == 1:
-        print("Error: Measurement range less than range")
-        return data_lower_limit
-    else:
-        co2 = (data[1] << 8) + data[2]
-        # print("co2: ", co2)
-        return co2 
-
+    return -999
     # Print the status bits (optional)
     # print("Status Byte: {}".format(status_byte))
     # print("Bit 7: Reserved: {}".format(bit7))
