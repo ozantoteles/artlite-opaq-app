@@ -168,10 +168,11 @@ def read(bus):
         else:
             co2 = (data[1] << 8) + data[2]
             # print("co2: ", co2)
-            if co2 > 400 and co2 < 5000:
+            if co2 > 350 and co2 < 5000:
                 #log_co2_value(CO2_LOG_PATH,co2)
-                print("co2: ", co2)
-                return co2 
+                co2_value = max(co2, 400)
+                print("co2: ", co2_value)
+                return co2_value
 
         # If an error is detected, increase the attempt count
         attempts += 1
