@@ -1,3 +1,5 @@
+# src/cbor2/__init__.py
+
 """
 The MIT License (MIT)
 

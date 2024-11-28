@@ -1,3 +1,5 @@
+# src/cbor2/encoder.py
+
 """
 The MIT License (MIT)
 
