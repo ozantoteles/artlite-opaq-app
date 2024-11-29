@@ -110,7 +110,7 @@ def cloud_tasks():
 def get_ttyUSB_device(module_name):
     # Define a mapping for USB paths to module names
     usb_path_mapping = {
-        'usb2/2-1': 'Lora Module',
+        'usb2/2-1': 'Lora Module', 
         'usb1/1-1': 'FTDI Module Connected to MODBUS Module',
     }
 
