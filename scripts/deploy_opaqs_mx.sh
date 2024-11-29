@@ -29,7 +29,7 @@ fi
 #for target in 192.168.1.158 192.168.1.148 192.168.1.151 192.168.1.140 192.168.1.172 192.168.1.168 192.168.1.108 192.168.1.134 192.168.1.131 192.168.1.118 192.168.1.188; do # cairtp2
 #for target in 192.168.1.188; do # cairtp2 2nd trial
 #for target in 192.168.1.129 192.168.1.178 192.168.1.164 192.168.1.142 192.168.1.114 192.168.1.193 192.168.1.100 192.168.1.163 192.168.1.145 192.168.1.168 192.168.1.139; do # cairtp3
-for target in 192.168.1.142 192.168.1.163 192.168.1.145 192.168.1.139; do # cairtp3
+for target in 192.168.100.106; do # cairtp3
   echo "Copying to $target..."
   eval $(printf "$COPY_CMD" "$target")
   echo "Extracting on $target..."
@@ -39,8 +39,8 @@ for target in 192.168.1.142 192.168.1.163 192.168.1.145 192.168.1.139; do # cair
   #echo 'Device config deleted.'
   #ssh -o ForwardX11=no root@$target "python3.10 /usr/local/artlite-opaq-app/scripts/unique_address_generator.py"
   #echo 'Device config regenerated.'
-  #ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
-  #echo 'Systemd service restarted.'
+  ssh -o ForwardX11=no root@$target "systemctl restart artlite-opaq-app.service"
+  echo 'Systemd service restarted.'
 
 done
  

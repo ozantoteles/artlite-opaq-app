@@ -26,7 +26,8 @@ from pymodbus.device import ModbusDeviceIdentification
 sys.path.append(os.path.abspath('/usr/local/artlite-opaq-app'))
 from sensorUtils import SensorHandler
 from functionAQI import getQuality
-from src.arduino_iot_cloud import ArduinoCloudClient, Task
+from arduino_iot_cloud import ArduinoCloudClient, Task # pip3.10 install arduino_iot_cloud, Successfully installed arduino_iot_cloud-1.4.0 cbor2-5.6.5 micropython-senml-0.1.1
+
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG,  # Set the logging level
@@ -73,14 +74,15 @@ def cloud_tasks():
         DEVICE_ID = secrets['DEVICE_ID']
         SECRET_KEY = secrets['SECRET_KEY']
 
-    client = ArduinoCloudClient(device_id=DEVICE_ID, username=DEVICE_ID, password=SECRET_KEY)
+    # Set sync_mode=True for synchronous operation
+    client = ArduinoCloudClient(device_id=DEVICE_ID, username=DEVICE_ID, password=SECRET_KEY, sync_mode=True)
 
     # Determine the number of devices based on cloud_array size
     num_devices = len(cloud_array) // 10
     logging.info(f"Configuring cloud tasks for {num_devices} devices.")
 
     # Register each value with an on_read callback and set an interval
-    interval = 20.0  # Set the interval to 10 seconds, adjust as needed
+    interval = 20.0  # Adjust as needed
     for i in range(1, num_devices + 1):
         start_index = (i - 1) * 10
         client.register(f'dev_id_{i}', value=0, on_read=get_value_callback(start_index), interval=interval)
@@ -92,10 +94,17 @@ def cloud_tasks():
         client.register(f'co2_{i}', value=0, on_read=get_value_callback(start_index + 6), interval=interval)
         client.register(f'voc_index_{i}', value=0, on_read=get_value_callback(start_index + 7), interval=interval)
         client.register(f'nox_index_{i}', value=0, on_read=get_value_callback(start_index + 8), interval=interval)
-        client.register(f'air_quality_index_{i}', value=0, on_read=get_value_callback(start_index + 9),
-                        interval=interval)
+        client.register(f'air_quality_index_{i}', value=0, on_read=get_value_callback(start_index + 9), interval=interval)
 
     client.start()
+
+    # Add a loop to periodically call client.update()
+    while True:
+        try:
+            client.update()
+        except Exception as e:
+            logging.error(f"Error during client update: {e}")
+        time.sleep(0.1)  # Adjust the sleep time as needed
 
 
 def get_ttyUSB_device(module_name):
