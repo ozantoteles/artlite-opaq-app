@@ -109,38 +109,79 @@ def cloud_tasks():
 
 def get_ttyUSB_device(module_name):
     # Define a mapping for USB paths to module names
-    module_mapping = {
-        'usb2/2-1': 'FTDI Module Connected to Lora Module',
+    usb_path_mapping = {
+        'usb2/2-1': 'Lora Module',
         'usb1/1-1': 'FTDI Module Connected to MODBUS Module',
     }
 
-    # Reverse the mapping to lookup by module name
-    name_to_path = {v: k for k, v in module_mapping.items()}
-
-    # Check if the provided module name exists in the mapping
-    if module_name not in name_to_path:
-        raise ValueError(f"Module name '{module_name}' not found in mapping.")
-
-    target_path = name_to_path[module_name]
-
     context = pyudev.Context()
+    connected_devices = {}
 
     # Iterate through all ttyUSB devices
     for device in context.list_devices(subsystem='tty', ID_BUS='usb'):
-        # Get the parent device, which corresponds to the USB device
         parent = device.find_parent(subsystem='usb')
-
-        if parent is not None:
-            # Extract only the usbX/X-Y part of the device path for mapping
+        if parent:
+            # Extract the usbX/X-Y part of the device path
             usb_path_parts = parent.device_path.split('/')
             usb_path = '/'.join(usb_path_parts[-3:-1])
+            connected_devices[usb_path] = device.device_node
 
-            # Check if this USB path matches the target path
-            if usb_path == target_path:
-                return device.device_node
+    assignments = {}
 
-    # Return None if no matching device is found
-    return None
+    if not connected_devices:
+        # No ttyUSB devices connected
+        assignments = {
+            'lora': '/dev/ttymxc2',
+            'modbus': None
+        }
+    elif len(connected_devices) == 1:
+        usb_path, device_node = next(iter(connected_devices.items()))
+        if usb_path == 'usb2/2-1':
+            # Only ttyUSB0 on usb2/2-1 connected
+            assignments = {
+                'lora': device_node,
+                'modbus': None
+            }
+        elif usb_path == 'usb1/1-1':
+            # Only ttyUSB0 on usb1/1-1 connected
+            assignments = {
+                'lora': '/dev/ttymxc2',
+                'modbus': device_node
+            }
+        else:
+            assignments = {
+                'lora': '/dev/ttymxc2',
+                'modbus': None
+            }
+    elif len(connected_devices) >= 2:
+        # Both ttyUSB0 on usb2/2-1 and ttyUSB1 on usb1/1-1 connected
+        assignments = {
+            'lora': connected_devices.get('usb1/1-1', '/dev/ttymxc2'),
+            'modbus': connected_devices.get('usb2/2-1')
+        }
+    else:
+        # Fallback assignment
+        assignments = {
+            'lora': '/dev/ttymxc2',
+            'modbus': None
+        }
+
+    # Write configuration to device_config.json
+    config = {
+        'lora_port': assignments['lora'],
+        'modbus_port': assignments['modbus']
+    }
+
+    with open('device_config.json', 'w') as config_file:
+        json.dump(config, config_file, indent=4)
+
+    # Map module_name to the assigned device node
+    if module_name == 'Lora Module':
+        return assignments.get('lora')
+    elif module_name == 'FTDI Module Connected to MODBUS Module':
+        return assignments.get('modbus')
+    else:
+        raise ValueError(f"Unknown module name '{module_name}'. Valid options are 'FTDI Module Connected to Lora Module' or 'FTDI Module Connected to MODBUS Module'.")
 
 
 def setup_pins(status):
@@ -977,7 +1018,7 @@ async def run_all():
     setup_pins("OFF")
     setup_pins("ON")
 
-    lora_device = get_ttyUSB_device('FTDI Module Connected to Lora Module')
+    lora_device = get_ttyUSB_device('Lora Module')
     modbus_device = get_ttyUSB_device('FTDI Module Connected to MODBUS Module')
 
     logging.debug(f"Lora Module Device: {lora_device}")
