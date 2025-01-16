@@ -26,8 +26,8 @@ from pymodbus.device import ModbusDeviceIdentification
 sys.path.append(os.path.abspath('/usr/local/artlite-opaq-app'))
 from sensorUtils import SensorHandler
 from functionAQI import getQuality
-from arduino_iot_cloud import ArduinoCloudClient, Task # pip3.10 install arduino_iot_cloud, Successfully installed arduino_iot_cloud-1.4.0 cbor2-5.6.5 micropython-senml-0.1.1
-
+from arduino_iot_cloud import ArduinoCloudClient, \
+    Task  # pip3.10 install arduino_iot_cloud, Successfully installed arduino_iot_cloud-1.4.0 cbor2-5.6.5 micropython-senml-0.1.1
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG,  # Set the logging level
@@ -53,6 +53,7 @@ MONITOR_INTERVAL = 10 * 60  # 10 minutes in seconds
 
 # Store last update times
 last_update_times = {}
+
 
 def get_value_callback(index):
     def callback(client, value_name=None):
@@ -94,7 +95,8 @@ def cloud_tasks():
         client.register(f'co2_{i}', value=0, on_read=get_value_callback(start_index + 6), interval=interval)
         client.register(f'voc_index_{i}', value=0, on_read=get_value_callback(start_index + 7), interval=interval)
         client.register(f'nox_index_{i}', value=0, on_read=get_value_callback(start_index + 8), interval=interval)
-        client.register(f'air_quality_index_{i}', value=0, on_read=get_value_callback(start_index + 9), interval=interval)
+        client.register(f'air_quality_index_{i}', value=0, on_read=get_value_callback(start_index + 9),
+                        interval=interval)
 
     client.start()
 
@@ -109,38 +111,80 @@ def cloud_tasks():
 
 def get_ttyUSB_device(module_name):
     # Define a mapping for USB paths to module names
-    module_mapping = {
-        'usb2/2-1': 'FTDI Module Connected to Lora Module',
+    usb_path_mapping = {
+        'usb2/2-1': 'Lora Module',
         'usb1/1-1': 'FTDI Module Connected to MODBUS Module',
     }
 
-    # Reverse the mapping to lookup by module name
-    name_to_path = {v: k for k, v in module_mapping.items()}
-
-    # Check if the provided module name exists in the mapping
-    if module_name not in name_to_path:
-        raise ValueError(f"Module name '{module_name}' not found in mapping.")
-
-    target_path = name_to_path[module_name]
-
     context = pyudev.Context()
+    connected_devices = {}
 
     # Iterate through all ttyUSB devices
     for device in context.list_devices(subsystem='tty', ID_BUS='usb'):
-        # Get the parent device, which corresponds to the USB device
         parent = device.find_parent(subsystem='usb')
-
-        if parent is not None:
-            # Extract only the usbX/X-Y part of the device path for mapping
+        if parent:
+            # Extract the usbX/X-Y part of the device path
             usb_path_parts = parent.device_path.split('/')
             usb_path = '/'.join(usb_path_parts[-3:-1])
+            connected_devices[usb_path] = device.device_node
 
-            # Check if this USB path matches the target path
-            if usb_path == target_path:
-                return device.device_node
+    assignments = {}
 
-    # Return None if no matching device is found
-    return None
+    if not connected_devices:
+        # No ttyUSB devices connected
+        assignments = {
+            'lora': '/dev/ttymxc2',
+            'modbus': None
+        }
+    elif len(connected_devices) == 1:
+        usb_path, device_node = next(iter(connected_devices.items()))
+        if usb_path == 'usb2/2-1':
+            # Only ttyUSB0 on usb2/2-1 connected
+            assignments = {
+                'lora': device_node,
+                'modbus': None
+            }
+        elif usb_path == 'usb1/1-1':
+            # Only ttyUSB0 on usb1/1-1 connected
+            assignments = {
+                'lora': '/dev/ttymxc2',
+                'modbus': device_node
+            }
+        else:
+            assignments = {
+                'lora': '/dev/ttymxc2',
+                'modbus': None
+            }
+    elif len(connected_devices) >= 2:
+        # Both ttyUSB0 on usb2/2-1 and ttyUSB1 on usb1/1-1 connected
+        assignments = {
+            'lora': connected_devices.get('usb1/1-1', '/dev/ttymxc2'),
+            'modbus': connected_devices.get('usb2/2-1')
+        }
+    else:
+        # Fallback assignment
+        assignments = {
+            'lora': '/dev/ttymxc2',
+            'modbus': None
+        }
+
+    # Write configuration to device_config.json
+    config = {
+        'lora_port': assignments['lora'],
+        'modbus_port': assignments['modbus']
+    }
+
+    with open('device_config.json', 'w') as config_file:
+        json.dump(config, config_file, indent=4)
+
+    # Map module_name to the assigned device node
+    if module_name == 'Lora Module':
+        return assignments.get('lora')
+    elif module_name == 'FTDI Module Connected to MODBUS Module':
+        return assignments.get('modbus')
+    else:
+        raise ValueError(
+            f"Unknown module name '{module_name}'. Valid options are 'FTDI Module Connected to Lora Module' or 'FTDI Module Connected to MODBUS Module'.")
 
 
 def setup_pins(status):
@@ -168,7 +212,7 @@ def setup_pins(status):
     except IOError as e:
         logging.debug(f"Failed to read USB2: {e}")
 
-    #LORA VCC
+    # LORA VCC
     # Set LoRa VCC
     try:
         with open('/sys/class/leds/lazer_cntrl/brightness', 'w') as f:
@@ -417,14 +461,14 @@ def configure_lora(serial_port, ebyte_type, ADDH, ADDL, channel):
         send_configuration_command(serial_port, channel_command, expected_channel_response)
 
     # Set to transparent transmission mode
-    #transparent_mode_command = bytes([0xC0, 0x05, 0x01, 0x00])
-    #expected_transparent_mode_response = bytes([0xC1, 0x05, 0x01, 0x00])
-    #send_configuration_command(serial_port, transparent_mode_command, expected_transparent_mode_response)
+    # transparent_mode_command = bytes([0xC0, 0x05, 0x01, 0x00])
+    # expected_transparent_mode_response = bytes([0xC1, 0x05, 0x01, 0x00])
+    # send_configuration_command(serial_port, transparent_mode_command, expected_transparent_mode_response)
 
     # Set devices to normal mode
-    #normal_mode_command = bytes([0xC0, 0x05, 0x01, 0x00])
-    #expected_normal_mode_response = bytes([0xC1, 0x05, 0x01, 0x00])
-    #send_configuration_command(serial_port, normal_mode_command, expected_normal_mode_response)
+    # normal_mode_command = bytes([0xC0, 0x05, 0x01, 0x00])
+    # expected_normal_mode_response = bytes([0xC1, 0x05, 0x01, 0x00])
+    # send_configuration_command(serial_port, normal_mode_command, expected_normal_mode_response)
 
     time.sleep(2)
     set_mode(ebyte_type, "normal")
@@ -438,13 +482,13 @@ def send_data(ser, device_id):
 
         # Example data to send
         # Generate random data payload (e.g., 3 bytes)
-        #data_payload = bytes([random.randint(0, 255) for _ in range(3)])
-        #data_payload = device_id.encode('utf-8')
+        # data_payload = bytes([random.randint(0, 255) for _ in range(3)])
+        # data_payload = device_id.encode('utf-8')
         # Create the full message
-        #full_message = start_delimiter + data_payload + end_delimiter
+        # full_message = start_delimiter + data_payload + end_delimiter
         message = device_id + read_sensor()
         # Send the message
-        #while True:
+        # while True:
         logging.debug(f"Sent Data: {message}")
         json_str = json.dumps(message)
 
@@ -476,7 +520,9 @@ def read_sensor():
     dataPM2_5 = sensor_data["CAIRPM2008_2.5_TSI_LEVEL"]
     dataPM10 = sensor_data["CAIRPM2008_10_TSI_LEVEL"]
 
-    sttCairHealthLevel, sttCairHealthStatus = getQuality("/usr/local/artlite-opaq-app/data/AQI.json", dataNO2 = dataNO2, dataVOC = dataVOC, dataPM10 = dataPM10, dataPM1_0 = dataPM1_0, dataCO2 = dataCO2, dataPM2_5 = dataPM2_5)
+    sttCairHealthLevel, sttCairHealthStatus = getQuality("/usr/local/artlite-opaq-app/data/AQI.json", dataNO2=dataNO2,
+                                                         dataVOC=dataVOC, dataPM10=dataPM10, dataPM1_0=dataPM1_0,
+                                                         dataCO2=dataCO2, dataPM2_5=dataPM2_5)
 
     serial_message = (
             ";" +
@@ -532,7 +578,7 @@ def parse_lora_data(data):
 def log_with_size_limit(log_file_path, log_entry, max_size_kb=100):
     """
     Appends a log entry with a timestamp to the log file and ensures the file size does not exceed max_size_kb.
-    
+
     :param log_file_path: Path to the log file.
     :param log_entry: The log entry string to append.
     :param max_size_kb: Maximum allowed size of the log file in kilobytes.
@@ -611,7 +657,7 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
                 start_index = find_device_index(device_id)
                 if start_index == -1:
                     raise ValueError(f"Device ID {device_id} not found in Modbus Array.")
-                
+
                 logging.debug(f"Updating Modbus Array at index {start_index} for Device ID {device_id}")
                 logging.debug(f"Modbus Array before update: {modbus_array[start_index:start_index + 10]}")
 
@@ -628,7 +674,7 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
                     int(parsed_data.get('PM10', 0)) & 0xFFFF,
                     int(parsed_data.get('AQI', 0)) & 0xFFFF
                 ]
-                
+
                 logging.debug(f"Modbus Array after update: {modbus_array[start_index:start_index + 10]}")
 
                 # Update last update time
@@ -643,6 +689,7 @@ def update_modbus_array(modbus_array, parsed_data, device_mapping_path):
         logging.error(f"Error updating Modbus Array: {e}")
 
     return modbus_array
+
 
 def handle_message(message, device_id):
     # Check if the message contains the unique device ID
@@ -666,6 +713,7 @@ def find_device_index(device_id):
             return i
     return -1
 
+
 async def monitor_modbus_array():
     global last_update_times
     while True:
@@ -680,6 +728,7 @@ async def monitor_modbus_array():
                     # Update only the last element of the 10 data points
                     modbus_array[start_index + 9] = 0xFF
         await asyncio.sleep(60)  # Check every minute
+
 
 def initialize_cloud_array(device_mapping_path):
     # Load the device mapping from JSON
@@ -776,7 +825,6 @@ async def main_task(context):
     global modbus_array
     global cloud_array
 
-
     try:
         with open("/usr/local/artlite-opaq-app/config/device_config.json", 'r') as f:
             unique_ids = json.load(f)
@@ -838,7 +886,7 @@ async def main_task(context):
                                 send_data(ser, device_id)
 
                                 end_time = time.time() + 5  # Calculate the end time (5 seconds from now)
-                                
+
                                 while time.time() < end_time:
                                     if ser.in_waiting > 0:  # Check if there's incoming data
                                         response = ser.readline().decode().strip()
@@ -846,7 +894,7 @@ async def main_task(context):
                                             logging.debug(f"Received message from gateway: {response}")
                                             handle_message(response, device_id)
                                     time.sleep(0.1)  # Small delay to avoid high CPU usage
-                                
+
                                 break  # Exit loop if successful
                         except Exception as e:
                             logging.debug(f"Error during LoRa configuration: {e}")
@@ -977,7 +1025,7 @@ async def run_all():
     setup_pins("OFF")
     setup_pins("ON")
 
-    lora_device = get_ttyUSB_device('FTDI Module Connected to Lora Module')
+    lora_device = get_ttyUSB_device('Lora Module')
     modbus_device = get_ttyUSB_device('FTDI Module Connected to MODBUS Module')
 
     logging.debug(f"Lora Module Device: {lora_device}")
@@ -999,10 +1047,10 @@ async def run_all():
         # Create a Modbus datastore with initial values
         hr_block = ModbusSequentialDataBlock(0, modbus_array)  # Create a holding register block
         store = ModbusSlaveContext(
-            di=ModbusSequentialDataBlock(0, [0]*100),  # Discrete Inputs
-            co=ModbusSequentialDataBlock(0, [0]*100),  # Coils
+            di=ModbusSequentialDataBlock(0, [0] * 100),  # Discrete Inputs
+            co=ModbusSequentialDataBlock(0, [0] * 100),  # Coils
             hr=hr_block,  # Holding Registers
-            ir=ModbusSequentialDataBlock(0, [0]*100)   # Input Registers
+            ir=ModbusSequentialDataBlock(0, [0] * 100)  # Input Registers
         )
         context = ModbusServerContext(slaves={2: store}, single=False)  # Set Slave Address to 2
 
