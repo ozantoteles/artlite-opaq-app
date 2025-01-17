@@ -104,6 +104,10 @@ def cloud_tasks():
     while True:
         try:
             client.update()
+            if client.mqtt.pid > 65535:
+                logging.error("client.mqtt.pid overflow detected. Restarting the service.")
+                os.system("systemctl restart artlite-opaq-app.service")
+
         except Exception as e:
             logging.error(f"Error during client update: {e}")
         time.sleep(0.1)  # Adjust the sleep time as needed
